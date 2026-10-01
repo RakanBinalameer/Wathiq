@@ -46,9 +46,11 @@ def test_fhir_export_has_no_name_or_transcript(client):
     assert "name" not in r.get_json()["entry"][0]["resource"]
 
 
-def test_fhir_export_is_private_to_owner(client, client2):
+def test_fhir_export_available_to_care_team_but_requires_login(client, client2, app):
     nid, _ = _export(client)
-    assert client2.get(f"/api/notes/{nid}/fhir").status_code == 404
+    assert client2.get(f"/api/notes/{nid}/fhir").status_code == 200
+    assert app.test_client().get(f"/api/notes/{nid}/fhir").status_code in (302, 401)
+    assert client2.get("/api/notes/99999999/fhir").status_code == 404
 
 
 def test_fhir_requires_login(app):

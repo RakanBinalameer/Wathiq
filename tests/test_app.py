@@ -138,10 +138,28 @@ def test_xss_is_escaped(client):
     assert "<script>alert(1)</script>" not in page and "<img src=x" not in page
 
 
-def test_notes_are_private_per_user(client, client2):
-    url = save(client, payload(client)).get_json()["url"]
-    assert client.get(url).status_code == 200
-    assert client2.get(url).status_code == 404
+def test_notes_are_shared_by_patient_and_cross_access_is_audited(app, client, client2):
+    ref = "SHARED-77"
+    url = save(client, payload(client), patient_ref=ref).get_json()["url"]
+    save(client2, payload(client2, "اعطيت بنادول 500 ملغ"), patient_ref=ref)
+    save(client, payload(client), patient_ref="OTHER-1")
+    page = client2.get(url)
+    assert page.status_code == 200 and "كتبها" in page.text  # another nurse can read it, author is shown
+    pt = client2.get(f"/patients/{ref}").text
+    assert pt.count("<li>") == 2 and "(أنت)" in pt and "OTHER-1" not in pt  # both nurses' notes, not other patients'
+    assert client2.get(f"/patients?ref={ref}").status_code == 302
+    from app.db import connect
+    con = connect(app.config["DATABASE"])
+    acts = [r["action"] for r in con.execute("SELECT action FROM audit")]
+    con.close()
+    assert "note_view_other" in acts and "patient_view" in acts
+
+
+def test_patient_page_validates_ref_and_requires_login(app, client):
+    assert client.get("/patients/<script>").status_code == 404
+    assert client.get("/patients?ref=محمد").status_code == 302  # bad ref -> back home, no lookup
+    assert client.get("/patients/NO-SUCH-1").status_code == 200
+    assert app.test_client().get("/patients/ANY-1").status_code in (302, 401)
 
 
 def test_audit_log_never_stores_note_text(app, client):

@@ -65,6 +65,16 @@
   </section>
 </div>
 
+<section class="recent" aria-labelledby="h-lookup">
+  <h2 id="h-lookup">فتح ملف مريض</h2>
+  <form method="get" action="{{ url_for('main.patient_lookup') }}" class="actions">
+    <label for="lookup-ref" class="hint">رقم الملف (MRN)</label>
+    <input id="lookup-ref" name="ref" dir="ltr" maxlength="32" autocomplete="off" placeholder="مثال: 100234" required>
+    <button class="btn" type="submit">عرض كل الملاحظات</button>
+  </form>
+  <p class="hint">يعرض ملاحظات جميع الممرضين لهذا الملف، وكل فتح يُسجَّل في سجل المراجعة.</p>
+</section>
+
 <section class="recent" aria-labelledby="h-recent">
   <h2 id="h-recent">آخر ملاحظاتك</h2>
   {% if notes %}

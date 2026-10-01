@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}ملف {{ ref }} — صوت التمريض{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="{{ url_for('main.index') }}">← الرجوع</a></p>
+  <h1>ملف المريض <span dir="ltr">{{ ref }}</span></h1>
+  <p class="hint">كل الملاحظات المحفوظة لهذا الرقم من جميع الممرضين، الأحدث أولاً. فتح الملف يُسجَّل في سجل المراجعة.</p>
+  {% if notes %}
+  <ul class="note-list">
+    {% for n in notes %}
+    <li>
+      <a href="{{ url_for('main.note_detail', note_id=n.id) }}">
+        <strong>{{ n.author }}{% if n.mine %} (أنت){% endif %}</strong>
+        <span>{{ n.created_at|local }}</span>
+        <span class="counts">أدوية: {{ n.drugs }} · تشخيصات: {{ n.dx }} · علامات: {{ n.vitals }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="hint">لا توجد ملاحظات محفوظة لهذا الرقم.</p>
+  {% endif %}
+</section>
+{% endblock %}

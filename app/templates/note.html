@@ -4,6 +4,7 @@
 <section class="page">
   <p><a href="{{ url_for('main.index') }}">← الرجوع</a></p>
   <h1>ملاحظة المريض <span dir="ltr">{{ note.patient_ref }}</span></h1>
+  <p class="hint">كتبها: {{ note.author }} · <a href="{{ url_for('main.patient_page', ref=note.patient_ref) }}">كل ملاحظات هذا الملف</a></p>
   <p class="hint">{{ note.created_at|local }}{% if note.allergies %} · الحساسية: {{ note.allergies }}{% endif %}</p>
   <blockquote class="transcript" dir="auto">{{ note.transcript }}</blockquote>
   <p><a class="btn" href="{{ url_for('main.api_note_fhir', note_id=note.id) }}" download>تصدير FHIR (JSON)</a>

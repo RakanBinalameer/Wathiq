@@ -106,10 +106,43 @@ def index():
 @bp.get("/notes/<int:note_id>")
 @login_required
 def note_detail(note_id):
-    r = get_db().execute("SELECT * FROM notes WHERE id=? AND user_id=?", (note_id, current_user.id)).fetchone()
+    r = get_db().execute(
+        "SELECT n.*, u.display_name AS author FROM notes n JOIN users u ON u.id = n.user_id WHERE n.id=?",
+        (note_id,)).fetchone()
     if not r:
-        abort(404)  # other users' notes look non-existent
+        abort(404)
+    if r["user_id"] != current_user.id:
+        audit("note_view_other", f"id={note_id} ref={r['patient_ref']}", current_user.id)
     return render_template("note.html", note=r, entities=json.loads(r["confirmed_json"]))
+
+
+@bp.get("/patients")
+@login_required
+def patient_lookup():
+    ref = (request.args.get("ref") or "").strip()
+    if not PATIENT_REF_RE.match(ref):
+        return redirect(url_for("main.index"))
+    return redirect(url_for("main.patient_page", ref=ref))
+
+
+@bp.get("/patients/<path:ref>")
+@login_required
+def patient_page(ref):
+    """Patient-centred view: every nurse's notes for one file number."""
+    if not PATIENT_REF_RE.match(ref):
+        abort(404)
+    rows = get_db().execute(
+        "SELECT n.id, n.created_at, n.confirmed_json, n.user_id, u.display_name AS author "
+        "FROM notes n JOIN users u ON u.id = n.user_id WHERE n.patient_ref=? ORDER BY n.id DESC LIMIT 200",
+        (ref,)).fetchall()
+    notes = []
+    for r in rows:
+        ents = json.loads(r["confirmed_json"])
+        notes.append({"id": r["id"], "created_at": r["created_at"], "author": r["author"], "mine": r["user_id"] == current_user.id,
+                      "drugs": sum(e["type"] == "drug" for e in ents), "dx": sum(e["type"] == "dx" for e in ents),
+                      "vitals": sum(e["type"] == "vital" for e in ents)})
+    audit("patient_view", f"ref={ref} notes={len(notes)}", current_user.id)
+    return render_template("patient.html", ref=ref, notes=notes)
 
 
 @bp.get("/kb")
@@ -230,12 +263,12 @@ def api_save_note():
 @login_required
 @limiter.limit("30 per minute")
 def api_note_fhir(note_id):
-    r = get_db().execute("SELECT id, patient_ref, created_at, confirmed_json FROM notes WHERE id=? AND user_id=?",
-                         (note_id, current_user.id)).fetchone()
+    r = get_db().execute("SELECT id, user_id, patient_ref, created_at, confirmed_json FROM notes WHERE id=?",
+                         (note_id,)).fetchone()
     if not r:
-        abort(404)  # other users' notes look non-existent
+        abort(404)
     body = fhir.dumps(fhir.note_to_bundle(r, json.loads(r["confirmed_json"]), kb()))
-    audit("fhir_export", f"id={note_id}", current_user.id)
+    audit("fhir_export", f"id={note_id}{'' if r['user_id'] == current_user.id else ' other_author'}", current_user.id)
     return Response(body, mimetype="application/fhir+json",
                     headers={"Content-Disposition": f'attachment; filename="note-{note_id}.fhir.json"'})
 
