@@ -2,11 +2,11 @@ import json
 import re
 from urllib.parse import urlparse
 
-from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, session, url_for
 from flask_login import UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import limiter, login_manager, stt
+from . import fhir, limiter, login_manager, stt
 from .db import audit, get_db
 from .extract import _TO_MG, analyze, allergy_drug_ids, drug_warnings
 
@@ -224,6 +224,20 @@ def api_save_note():
     db.commit()
     audit("note_saved", f"id={cur.lastrowid} entities={len(cleaned)} acked={bool(danger)}", current_user.id)
     return jsonify(id=cur.lastrowid, url=url_for("main.note_detail", note_id=cur.lastrowid)), 201
+
+
+@bp.get("/api/notes/<int:note_id>/fhir")
+@login_required
+@limiter.limit("30 per minute")
+def api_note_fhir(note_id):
+    r = get_db().execute("SELECT id, patient_ref, created_at, confirmed_json FROM notes WHERE id=? AND user_id=?",
+                         (note_id, current_user.id)).fetchone()
+    if not r:
+        abort(404)  # other users' notes look non-existent
+    body = fhir.dumps(fhir.note_to_bundle(r, json.loads(r["confirmed_json"]), kb()))
+    audit("fhir_export", f"id={note_id}", current_user.id)
+    return Response(body, mimetype="application/fhir+json",
+                    headers={"Content-Disposition": f'attachment; filename="note-{note_id}.fhir.json"'})
 
 
 @bp.get("/api/kb/search")

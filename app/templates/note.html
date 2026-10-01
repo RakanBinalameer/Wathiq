@@ -6,6 +6,8 @@
   <h1>ملاحظة المريض <span dir="ltr">{{ note.patient_ref }}</span></h1>
   <p class="hint">{{ note.created_at|local }}{% if note.allergies %} · الحساسية: {{ note.allergies }}{% endif %}</p>
   <blockquote class="transcript" dir="auto">{{ note.transcript }}</blockquote>
+  <p><a class="btn" href="{{ url_for('main.api_note_fhir', note_id=note.id) }}" download>تصدير FHIR (JSON)</a>
+     <span class="hint">صيغة HL7 FHIR R4: أدوية وتشخيصات وعلامات حيوية فقط، بدون نص الإملاء ولا الاسم.</span></p>
   <table class="grid">
     <thead><tr><th>النوع</th><th>ما ورد في النص</th><th>المطابقة</th><th>الرمز</th><th>التفاصيل</th></tr></thead>
     <tbody>
