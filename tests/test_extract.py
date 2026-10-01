@@ -118,18 +118,3 @@ def test_parsers():
     assert parse_dose("2 حبتين") and parse_dose("500mg")["mg"] == 500
     assert parse_route("subcutaneous") == "SC" and parse_route("تحت اللسان") == "SL"
     assert parse_freq("q6h") == "q6h" and parse_freq("مرتين يوميا") == "BID" and parse_freq("عند النوم") == "QHS"
-
-
-def test_spoken_arabic_vitals_with_pronouns_and_fillers(kb):
-    def vit(t):
-        return {e["kind"]: e["value"] for e in ents(kb, t, type_="vital")}
-    assert vit("وليد في حراره درجه حرارته 30 تعبان")["temp"] == "30"
-    v = vit("المريض حرارته 38.5 ونبضه 110 وضغطه 150/95 وسكره 240")
-    assert v == {"temp": "38.5", "hr": "110", "bp": "150/95", "glucose": "240"}
-    assert vit("درجة حرارة المريض 39")["temp"] == "39"
-    assert vit("حرارتها ٣٨")["temp"] == "38"
-
-
-def test_diabetes_word_is_not_read_as_glucose_value(kb):
-    assert not ents(kb, "المريض سكري 15 سنة", type_="vital")
-    assert not ents(kb, "سكري نوع ثاني", type_="vital")

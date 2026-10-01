@@ -66,24 +66,20 @@ PRN_RE = re.compile(r"\bprn\b|as\s+needed|when\s+needed|عند\s+اللزوم|ع
 SENT_BREAK = re.compile(r"[؟?!;؛\n]|\.(?!\d)")
 
 # ---- vitals ------------------------------------------------------------------------------------
-# Spoken Arabic attaches a pronoun to the measure (حرارته، نبضه، سكره) and often puts a filler word
-# before the number (حرارة المريض 39). English forms need none of this.
-_PRON = r"(?:ه|ها|هم)?"
-_FILL = r"(?:\s+(?:المريض|المريضه|عنده|عندها|تبلغ|يبلغ|حوالي|تقريبا|الان|هو|هي|يعادل|وصل|وصلت|صار|كان))*"
-_SEP = _FILL + r"\s*(?:is|هو|:|=|-)?\s*"
+_SEP = r"\s*(?:is|هو|:|=|-)?\s*"
 VITALS = [
     ("bp", "ضغط الدم", "mmHg",
-     re.compile(r"(?:\bbp\b|blood\s+pressure|ضغط" + _PRON + r"(?:\s+الدم)?)" + _SEP + r"(\d{2,3})\s*/\s*(\d{2,3})(?:\s*mmhg)?")),
+     re.compile(r"(?:\bbp\b|blood\s+pressure|ضغط(?:\s+الدم)?)" + _SEP + r"(\d{2,3})\s*/\s*(\d{2,3})(?:\s*mmhg)?")),
     ("hr", "النبض", "bpm",
-     re.compile(r"(?:\bhr\b|heart\s+rate|pulse|نبض" + _PRON + r"|معدل\s+النبض|ضربات\s+القلب)" + _SEP + r"(\d{2,3})(?![\d/])")),
+     re.compile(r"(?:\bhr\b|heart\s+rate|pulse|نبض|معدل\s+النبض|ضربات\s+القلب)" + _SEP + r"(\d{2,3})(?![\d/])")),
     ("rr", "معدل التنفس", "/min",
-     re.compile(r"(?:\brr\b|resp(?:iratory)?\s+rate|معدل\s+التنفس|تنفس" + _PRON + r")" + _SEP + r"(\d{1,2})(?![\d/.])")),
+     re.compile(r"(?:\brr\b|resp(?:iratory)?\s+rate|معدل\s+التنفس|تنفس)" + _SEP + r"(\d{1,2})(?![\d/.])")),
     ("temp", "الحرارة", "°C",
-     re.compile(r"(?:\btemp(?:erature)?\b|حرار(?:ه|ت" + _PRON + r")|درجه\s+الحراره)" + _SEP + r"(\d{2,3}(?:\.\d)?)\s*(?:°|c\b|f\b|درجه)?")),
+     re.compile(r"(?:\btemp(?:erature)?\b|حراره|درجه\s+الحراره)" + _SEP + r"(\d{2,3}(?:\.\d)?)\s*(?:°|c\b|f\b|درجه)?")),
     ("spo2", "تشبع الأكسجين", "%",
      re.compile(r"(?:spo2|o2\s*sat|\bsat\b|saturation|اشباع(?:\s+الاكسجين)?|اكسجين)" + _SEP + r"(\d{2,3})\s*%?(?!\s*(?:لتر|l\b|lpm|liters?))")),
     ("glucose", "سكر الدم", "mg/dL",
-     re.compile(r"(?:\brbs\b|\bfbs\b|\bbgl\b|glucose|blood\s+sugar|\bsugar\b|سكر" + _PRON + r"|جلوكوز)" + _SEP + r"(\d{1,3}(?:\.\d)?)\s*(mg/dl|mmol(?:/l)?)?")),
+     re.compile(r"(?:\brbs\b|\bfbs\b|\bbgl\b|glucose|blood\s+sugar|\bsugar\b|سكر|جلوكوز)" + _SEP + r"(\d{1,3}(?:\.\d)?)\s*(mg/dl|mmol(?:/l)?)?")),
 ]
 # plausible = physiologically possible (else "check spelling"); alert = clinically notable (informational)
 PLAUSIBLE = {"hr": (20, 250), "rr": (4, 60), "temp": (30, 43), "spo2": (50, 100), "glucose": (10, 900)}

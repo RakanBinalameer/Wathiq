@@ -6,6 +6,5 @@ Flask-Talisman>=1.1
 Flask-Compress>=1.14
 RapidFuzz>=3.6
 gunicorn>=21.2
-tzdata  # time-zone database; required on Windows for Asia/Riyadh
 # optional, server-side speech-to-text (set WHISPER_MODEL): faster-whisper
-# dev: pytest (pip install pytest)
+# dev: pytest
