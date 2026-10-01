@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}ملاحظة #{{ note.id }} — صوت التمريض{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="{{ url_for('main.index') }}">← الرجوع</a></p>
+  <h1>ملاحظة المريض <span dir="ltr">{{ note.patient_ref }}</span></h1>
+  <p class="hint">{{ note.created_at|local }}{% if note.allergies %} · الحساسية: {{ note.allergies }}{% endif %}</p>
+  <blockquote class="transcript" dir="auto">{{ note.transcript }}</blockquote>
+  <table class="grid">
+    <thead><tr><th>النوع</th><th>ما ورد في النص</th><th>المطابقة</th><th>الرمز</th><th>التفاصيل</th></tr></thead>
+    <tbody>
+    {% for e in entities %}
+      <tr>
+        <td><span class="pill {{ e.type }}">{{ {'drug':'دواء','dx':'تشخيص','vital':'علامة حيوية'}[e.type] }}</span></td>
+        <td dir="auto">{{ e.text }}</td>
+        <td dir="auto">{% if e.type == 'vital' %}{{ e.label }}{% else %}{{ e.label }}{% if e.label_ar %} · {{ e.label_ar }}{% endif %}{% endif %}</td>
+        <td dir="ltr">{% if e.code %}{{ e.code_system }} {{ e.code }}{% else %}—{% endif %}</td>
+        <td dir="auto">
+          {% if e.type == 'drug' %}
+            {% if e.dose %}{{ e.dose.text }}{% endif %} {% if e.route %}{{ e.route }}{% endif %} {% if e.freq %}{{ e.freq }}{% endif %} {% if e.prn %}PRN{% endif %}
+          {% elif e.type == 'vital' %}{{ e.value }} {{ e.unit }}{% endif %}
+          {% for w in e.warnings %}<span class="flag {{ w.level }}">{{ w.msg }}</span>{% endfor %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="hint">لم تُحفظ عناصر منظَّمة لهذه الملاحظة.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

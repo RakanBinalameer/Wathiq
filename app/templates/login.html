@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}تسجيل الدخول — صوت التمريض{% endblock %}
+{% block content %}
+<section class="login">
+  <div class="login-copy">
+    <h1>أملِ ملاحظتك،<br>وراجع ما فهمه النظام قبل الحفظ.</h1>
+    <p>يستمع إلى كلام الكادر التمريضي بالعربية الممزوجة بالمصطلحات الإنجليزية، ويحوّله إلى أدوية وتشخيصات وعلامات حيوية مطابقة لقاعدة معرفة طبية، ولا يحفظ شيئاً قبل تأكيدك.</p>
+  </div>
+  <form class="card login-form" method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2>تسجيل الدخول</h2>
+    {% if error %}<p class="alert danger" role="alert">{{ error }}</p>{% endif %}
+    <label for="username">اسم المستخدم</label>
+    <input id="username" name="username" autocomplete="username" required autofocus dir="ltr">
+    <label for="password">كلمة المرور</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required dir="ltr">
+    <button class="btn primary" type="submit">دخول</button>
+  </form>
+</section>
+{% endblock %}

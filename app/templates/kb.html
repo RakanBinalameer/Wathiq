@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}قاعدة المعرفة — صوت التمريض{% endblock %}
+{% block content %}
+<section class="page">
+  <h1>قاعدة المعرفة الطبية</h1>
+  <p class="lead">هذا هو المرجع الثابت الذي يُطابِق النظام عليه كل مصطلح. لا يستطيع النظام «اختراع» دواء أو تشخيص غير موجود هنا.</p>
+  <dl class="stats">
+    <div><dt>أدوية</dt><dd>{{ stats.get('drugs_total', '—') }}</dd></div>
+    <div><dt>منتجات RxNorm</dt><dd>{{ stats.get('rxnorm_products', '—') }}</dd></div>
+    <div><dt>تشخيصات</dt><dd>{{ stats.get('dx_total', '—') }}</dd></div>
+    <div><dt>منها مرتبط بـ ICD-10</dt><dd>{{ stats.get('curated_dx', '—') }}</dd></div>
+  </dl>
+  <div class="alert warn">
+    <strong>مصادر البيانات وحدودها:</strong>
+    أدوية ومصطلحات <em>Synthea</em> (بيانات اصطناعية مفتوحة المصدر) + عيّنة منسَّقة لأدوية شائعة في السوق السعودي وتشخيصات ICD-10.
+    قائمة هيئة الغذاء والدواء (SFDA) الرسمية <strong>لم تُستورد بعد</strong> في هذه النسخة؛ الأدوية المعلَّمة «غير مُتحقَّق منها» تحتاج مراجعة الفريق الصيدلي.
+  </div>
+  <label for="q">ابحث في القاعدة</label>
+  <input id="q" type="search" autocomplete="off" placeholder="باراسيتامول، Augmentin، ضغط، I10 …">
+  <p id="kb-status" class="status" role="status" aria-live="polite"></p>
+  <div id="kb-results" class="kb-results"></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='kb.js') }}?v=1" defer></script>{% endblock %}

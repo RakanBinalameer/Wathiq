@@ -1,0 +1,10 @@
+NurseVoice includes data derived from third-party sources:
+
+* Synthea(TM) - https://github.com/synthetichealth/synthea - Apache License 2.0.
+  data/synthea_codes.json lists RxNorm medication codes and SNOMED-CT condition codes
+  extracted from Synthea's module files by scripts/extract_synthea.py.
+* ICD-10 codes in data/icd10_curated.csv follow the WHO classification (https://icd.who.int).
+* IBM Plex Sans Arabic font (app/static/fonts) - SIL Open Font License 1.1 (see fonts/LICENSE.txt).
+
+Drug and diagnosis lists in data/*_curated.csv are a hand-curated sample for demonstration.
+They are NOT an official SFDA registry and must be reviewed by a pharmacist before clinical use.

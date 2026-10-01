@@ -1,0 +1,54 @@
+icd10,name_en,name_ar,snomed,aliases
+I10,Essential hypertension,ارتفاع ضغط الدم الأساسي,59621000,hypertension|htn|high blood pressure|ارتفاع ضغط الدم|ارتفاع الضغط|ضغط عالي|ارتفاع في الضغط
+E11.9,Type 2 diabetes mellitus,السكري من النوع الثاني,44054006,dm2|t2dm|type 2 diabetes|diabetes mellitus type 2|السكري|سكري|سكري نوع ثاني|داء السكري
+E10.9,Type 1 diabetes mellitus,السكري من النوع الأول,46635009,dm1|t1dm|type 1 diabetes|سكري نوع اول|سكري الاطفال
+E11.3,Type 2 diabetes with retinopathy,اعتلال الشبكية السكري,4855003,diabetic retinopathy|اعتلال الشبكية السكري
+J45.9,Asthma,الربو,195967001,asthma|bronchial asthma|الربو|ربو|الربو القصبي|ازمة ربو
+J44.9,Chronic obstructive pulmonary disease,الانسداد الرئوي المزمن,13645005,copd|chronic obstructive pulmonary disease|الانسداد الرئوي المزمن|انسداد رئوي مزمن
+J18.9,Pneumonia,الالتهاب الرئوي,233604007,pneumonia|التهاب رئوي|التهاب الرئة|نزلة رئوية
+J20.9,Acute bronchitis,التهاب الشعب الهوائية الحاد,10509002,acute bronchitis|bronchitis|التهاب الشعب الهوائية|التهاب القصبات
+J06.9,Acute upper respiratory infection,عدوى الجهاز التنفسي العلوي,54150009,uri|upper respiratory infection|urti|التهاب الجهاز التنفسي العلوي|نزلة برد|زكام
+J30.4,Allergic rhinitis,التهاب الأنف التحسسي,61582004,allergic rhinitis|hay fever|حساسية الانف|التهاب الانف التحسسي|حساسية الأنف
+H66.9,Otitis media,التهاب الأذن الوسطى,65363002,otitis media|ear infection|التهاب الاذن|التهاب الأذن الوسطى
+U07.1,COVID-19,كوفيد-19,840539006,covid|covid-19|covid 19|corona|كورونا|كوفيد|كوفيد 19
+N39.0,Urinary tract infection,التهاب المسالك البولية,68566005,uti|urinary tract infection|التهاب المسالك البولية|التهاب المجاري البولية|التهاب البول
+N20.0,Kidney stone,حصى الكلى,95570007,kidney stone|renal stone|nephrolithiasis|حصى الكلى|حصوة الكلى|حصى في الكلى
+N17.9,Acute kidney injury,الفشل الكلوي الحاد,14669001,aki|acute kidney injury|acute renal failure|فشل كلوي حاد|الفشل الكلوي الحاد
+N18.9,Chronic kidney disease,مرض الكلى المزمن,709044004,ckd|chronic kidney disease|مرض الكلى المزمن|قصور كلوي مزمن|الفشل الكلوي المزمن
+N18.6,End-stage renal disease,الفشل الكلوي في المرحلة النهائية,46177005,esrd|end stage renal disease|فشل كلوي نهائي
+I50.9,Heart failure,قصور القلب,84114007,heart failure|chf|hf|congestive heart failure|فشل القلب|قصور القلب|هبوط القلب|قصور في القلب
+I48.9,Atrial fibrillation,الرجفان الأذيني,49436004,afib|af|atrial fibrillation|رجفان اذيني|الرجفان الاذيني|رجفان في القلب
+I25.1,Coronary atherosclerosis,تصلب الشرايين التاجية,53741008,cad|coronary artery disease|coronary atherosclerosis|تصلب الشرايين التاجية|مرض الشريان التاجي|انسداد الشرايين التاجية
+I21.9,Acute myocardial infarction,احتشاء عضلة القلب الحاد,22298006,mi|acute mi|myocardial infarction|heart attack|جلطة قلبية|جلطة في القلب|احتشاء عضلة القلب|نوبة قلبية
+I63.9,Cerebral infarction (stroke),السكتة الدماغية,230690007,stroke|cva|cerebral infarction|سكتة دماغية|جلطة دماغية|جلطة في الدماغ|السكتة الدماغية
+I26.9,Pulmonary embolism,الانصمام الرئوي,59282003,pe|pulmonary embolism|جلطة رئوية|انصمام رئوي|جلطة في الرئة
+I82.9,Deep vein thrombosis,تجلط الأوردة العميقة,128053003,dvt|deep vein thrombosis|deep venous thrombosis|جلطة الساق|تجلط الاوردة العميقة|جلطة في الساق
+E78.5,Hyperlipidemia,ارتفاع الدهون في الدم,55822004,hyperlipidemia|dyslipidemia|high cholesterol|ارتفاع الكوليسترول|ارتفاع الدهون|دهون الدم
+E66.9,Obesity,السمنة,414916001,obesity|obese|السمنة|سمنة|زيادة الوزن المفرطة
+E03.9,Hypothyroidism,قصور الغدة الدرقية,40930008,hypothyroidism|underactive thyroid|قصور الغدة الدرقية|خمول الغدة الدرقية|كسل الغدة الدرقية
+E05.9,Hyperthyroidism,فرط نشاط الغدة الدرقية,34486009,hyperthyroidism|overactive thyroid|فرط نشاط الغدة الدرقية|زيادة نشاط الغدة الدرقية
+E86.0,Dehydration,الجفاف,34095006,dehydration|dehydrated|الجفاف|جفاف|نقص السوائل
+E87.6,Hypokalemia,نقص البوتاسيوم,43339004,hypokalemia|low potassium|نقص البوتاسيوم|هبوط البوتاسيوم
+D64.9,Anemia,فقر الدم,271737000,anemia|anaemia|فقر الدم|انيميا|أنيميا|نقص الدم
+D50.9,Iron deficiency anemia,فقر الدم بنقص الحديد,87522002,iron deficiency anemia|ida|فقر الدم بنقص الحديد|انيميا نقص الحديد
+K21.9,Gastro-esophageal reflux disease,ارتجاع المريء,235595009,gerd|reflux|gastroesophageal reflux|ارتجاع المريء|ارتجاع معدي|الارتجاع المعدي المريئي|حموضة المعدة
+A09,Gastroenteritis,التهاب المعدة والأمعاء,25374005,gastroenteritis|stomach flu|التهاب المعدة والامعاء|نزلة معوية|تسمم غذائي
+K35.8,Acute appendicitis,التهاب الزائدة الدودية الحاد,74400008,appendicitis|acute appendicitis|التهاب الزائدة الدودية|التهاب الزايدة|الزايدة الدودية
+A41.9,Sepsis,تعفن الدم,91302008,sepsis|septicemia|تعفن الدم|تسمم الدم|انتان الدم
+R50.9,Fever,الحمى,386661006,fever|pyrexia|الحمى|حمى|ارتفاع الحرارة|سخونة|حرارة مرتفعة
+R51,Headache,الصداع,25064002,headache|الصداع|صداع
+G43.9,Migraine,الشقيقة,37796009,migraine|الشقيقة|صداع نصفي|مايجرين
+R07.9,Chest pain,ألم الصدر,29857009,chest pain|ألم الصدر|الم الصدر|الم في الصدر|وجع الصدر|وجع في الصدر
+R06.0,Dyspnea,ضيق التنفس,267036007,dyspnea|dyspnoea|shortness of breath|sob|ضيق التنفس|ضيق في التنفس|صعوبة التنفس|صعوبة في التنفس
+R10.4,Abdominal pain,ألم البطن,21522001,abdominal pain|stomach pain|ألم البطن|الم البطن|الم في البطن|وجع البطن|وجع في البطن
+R11,Nausea and vomiting,الغثيان والقيء,422587007,nausea|vomiting|nausea and vomiting|غثيان|قيء|استفراغ|تقيؤ
+R55,Syncope,إغماء,271594007,syncope|fainting|collapse|اغماء|إغماء|فقدان الوعي المؤقت|دوخة وسقوط
+G40.9,Epilepsy,الصرع,84757009,epilepsy|seizure disorder|الصرع|صرع|نوبات صرع|تشنجات
+F32.9,Depression,الاكتئاب,35489007,depression|depressive disorder|الاكتئاب|اكتئاب
+M54.5,Low back pain,ألم أسفل الظهر,279039007,low back pain|lbp|back pain|الم اسفل الظهر|وجع الظهر|الم الظهر|الم في الظهر
+M19.9,Osteoarthritis,خشونة المفاصل,396275006,osteoarthritis|oa|arthritis|خشونة المفاصل|التهاب المفاصل|خشونة الركبة|خشونة في المفاصل
+M81.0,Osteoporosis,هشاشة العظام,64859006,osteoporosis|هشاشة العظام|ترقق العظام
+L20.9,Atopic dermatitis,التهاب الجلد التأتبي,24079001,atopic dermatitis|eczema|اكزيما|أكزيما|التهاب الجلد التاتبي|حساسية الجلد
+O24.4,Gestational diabetes,سكري الحمل,11687002,gestational diabetes|gdm|سكري الحمل|سكر الحمل
+B34.9,Viral infection,عدوى فيروسية,34014006,viral infection|virus|عدوى فيروسية|التهاب فيروسي|فيروس
+C90.0,Multiple myeloma,الورم النخاعي المتعدد,109989006,multiple myeloma|myeloma|الورم النخاعي المتعدد|ورم النخاع

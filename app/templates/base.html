@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="theme-color" content="#0e5a5f">
+  <title>{% block title %}صوت التمريض{% endblock %}</title>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1">
+</head>
+<body>
+  <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
+  <header class="top">
+    <a class="brand" href="{{ url_for('main.index') }}" aria-label="صوت التمريض — الصفحة الرئيسية">
+      <svg class="wave" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+        <rect x="1" y="7" width="3" height="6" rx="1.5"/><rect x="6" y="3" width="3" height="14" rx="1.5"/>
+        <rect x="11" y="0" width="3" height="20" rx="1.5"/><rect x="16" y="4" width="3" height="12" rx="1.5"/>
+        <rect x="21" y="8" width="3" height="5" rx="1.5"/>
+      </svg>
+      <span>صوت التمريض</span>
+    </a>
+    <nav aria-label="التنقل الرئيسي">
+      {% if current_user.is_authenticated %}
+        <a href="{{ url_for('main.index') }}" {% if request.endpoint == 'main.index' %}aria-current="page"{% endif %}>الإملاء</a>
+        <a href="{{ url_for('main.kb_page') }}" {% if request.endpoint == 'main.kb_page' %}aria-current="page"{% endif %}>قاعدة المعرفة</a>
+      {% endif %}
+      <a href="{{ url_for('main.about') }}" {% if request.endpoint == 'main.about' %}aria-current="page"{% endif %}>كيف يعمل؟</a>
+    </nav>
+    {% if current_user.is_authenticated %}
+    <form class="who" method="post" action="{{ url_for('main.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <span>{{ current_user.display_name }}</span>
+      <button class="link" type="submit">تسجيل الخروج</button>
+    </form>
+    {% endif %}
+  </header>
+  <main id="main">{% block content %}{% endblock %}</main>
+  <footer class="foot">
+    نموذج أولي لمسابقة هاكاثون. لا يحلّ محلّ التوثيق السريري المعتمد، وكل ما يستخرجه النظام يحتاج مراجعة الممرض قبل الحفظ.
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

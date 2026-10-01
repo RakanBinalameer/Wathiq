@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}ملاحظة جديدة — صوت التمريض{% endblock %}
+{% block content %}
+<div class="workspace">
+  <section class="pane dictate" aria-labelledby="h-dictate">
+    <h1 id="h-dictate">ملاحظة جديدة</h1>
+    <div class="row2">
+      <div>
+        <label for="patient-ref">رقم الملف (MRN)</label>
+        <input id="patient-ref" dir="ltr" maxlength="32" autocomplete="off" placeholder="مثال: 100234">
+        <p class="hint">أرقام وأحرف فقط. لا تكتب اسم المريض.</p>
+      </div>
+      <div>
+        <label for="allergies">الحساسية المعروفة</label>
+        <input id="allergies" maxlength="300" autocomplete="off" placeholder="مثال: بنسلين، NSAIDs">
+        <p class="hint">يُنبَّه إذا ذُكر دواء من نفس الفئة.</p>
+      </div>
+    </div>
+
+    <label for="transcript">نص الملاحظة</label>
+    <textarea id="transcript" rows="7" maxlength="5000" placeholder="اضغط الميكروفون وتكلّم، أو اكتب هنا."></textarea>
+
+    <div class="actions">
+      <button id="mic" class="mic" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 0 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V20H9.5a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H13v-2.59A6 6 0 0 0 18 11.5Z"/></svg>
+        <span id="mic-label">ابدأ الإملاء</span>
+      </button>
+      <select id="lang" aria-label="لغة الإملاء">
+        <option value="ar-SA">إملاء بالعربية</option>
+        <option value="en-US">Dictation in English</option>
+      </select>
+      <button id="analyze" class="btn primary" type="button">حلّل الملاحظة</button>
+      <button id="clear" class="btn" type="button">مسح</button>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p id="stt-mode" class="hint" hidden></p>
+
+    <div class="samples">
+      <span class="hint">جرّب مثالاً:</span>
+      <button class="chip-btn" type="button" data-sample="أعطيت المريض باراسيتامول 1 جرام وريدي كل 8 ساعات للحمى. الضغط 150/95 والنبض 110 والحرارة 38.5">عربي</button>
+      <button class="chip-btn" type="button" data-sample="Pt known case of HTN and DM2. Gave metformin 500 mg PO BID and amlodipine 10 mg PO daily. BP 165/100, RBS 240.">إنجليزي</button>
+      <button class="chip-btn" type="button" data-allergies="بنسلين" data-sample="اعطيت اوغمنتين 1 جرام فموي مرتين يوميا، المريض يشتكي من الم في الصدر وضيق التنفس، SpO2 88%">مختلط + حساسية</button>
+      <button class="chip-btn" type="button" data-sample="اعطيت بنادول 10 جرام وريدي، واعطيت ميتفرمين 500 ملغ مرتين يوميا">جرعة زائدة + تهجئة خاطئة</button>
+    </div>
+  </section>
+
+  <section class="pane review" aria-labelledby="h-review">
+    <h2 id="h-review">المراجعة قبل الحفظ</h2>
+    <div id="empty" class="empty">
+      <p>بعد التحليل يظهر هنا ما فهمه النظام من الملاحظة.</p>
+      <p class="hint">الأدوية والتشخيصات والعلامات الحيوية، كلٌّ مطابَق مع قاعدة المعرفة. ما لم يكن متأكداً منه يُوسَم «يحتاج مراجعة» ولن تُحفظ الملاحظة حتى تؤكده.</p>
+    </div>
+    <div id="result" hidden>
+      <p id="stale" class="alert warn" role="status" hidden>تغيّر النص بعد التحليل. أعد التحليل قبل الحفظ.</p>
+      <p id="annotated" class="annotated" aria-label="النص مع المصطلحات المتعرَّف عليها"></p>
+      <ul class="legend" aria-label="دليل الألوان">
+        <li><i class="dot drug"></i>دواء</li><li><i class="dot dx"></i>تشخيص</li><li><i class="dot vital"></i>علامة حيوية</li>
+      </ul>
+      <div id="entities"></div>
+      <div id="alerts" class="alert danger" role="alert" hidden></div>
+      <label class="ack" id="ack-wrap" hidden><input type="checkbox" id="ack"> راجعتُ التنبيهات الخطرة أعلاه وأتحمّل مسؤولية الحفظ.</label>
+      <button id="save" class="btn primary wide" type="button" disabled>حفظ الملاحظة المؤكَّدة</button>
+      <p id="save-hint" class="hint"></p>
+    </div>
+  </section>
+</div>
+
+<section class="recent" aria-labelledby="h-recent">
+  <h2 id="h-recent">آخر ملاحظاتك</h2>
+  {% if notes %}
+  <ul class="note-list">
+    {% for n in notes %}
+    <li>
+      <a href="{{ url_for('main.note_detail', note_id=n.id) }}">
+        <strong dir="ltr">{{ n.patient_ref }}</strong>
+        <span>{{ n.created_at|local }}</span>
+        <span class="counts">أدوية: {{ n.drugs }} · تشخيصات: {{ n.dx }} · علامات: {{ n.vitals }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="hint">لا توجد ملاحظات محفوظة بعد. جرّب أحد الأمثلة أعلاه.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=1" defer></script>{% endblock %}

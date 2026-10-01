@@ -1,0 +1,64 @@
+generic_en,generic_ar,brands_en,aliases_ar,max_single_dose_mg,ambiguous
+paracetamol,باراسيتامول,Panadol|Adol|Tylenol,acetaminophen|باراسيتامول|بارسيتامول|بنادول|بانادول|ادول|أدول|تايلينول|باراسيتمول,1000,0
+ibuprofen,ايبوبروفين,Brufen|Advil|Nurofen,ايبوبروفين|بروفين|ادفيل|نوروفين|ايبوبروفن,800,0
+diclofenac,ديكلوفيناك,Voltaren|Cataflam,ديكلوفيناك|فولتارين|كاتافلام|ديكلوفيناك,100,0
+ketorolac,كيتورولاك,Toradol,كيتورولاك|توراديول|كيتورولك,30,0
+tramadol,ترامادول,Tramal,ترامادول|ترامال,100,0
+morphine,مورفين,Morphine,مورفين|مورفن,30,0
+fentanyl,فنتانيل,Fentanyl,فنتانيل|فينتانيل,,0
+amoxicillin,اموكسيسيلين,Amoxil|Ibiamox,اموكسيسيلين|أموكسيسيلين|اموكسيل|اموكسيسلين,1000,0
+amoxicillin clavulanate,اموكسيسيلين كلافيولانيك,Augmentin|Amoclav|Curam,co-amoxiclav|amoxiclav|اوغمنتين|أوغمنتين|اوقمنتين|كيورام|اموكسيسيلين كلافيولانيك,1000,0
+azithromycin,ازيثروميسين,Zithromax|Azithral,ازيثروميسين|زيثروماكس|زيثرومايسين|ازثرومايسين,500,0
+ceftriaxone,سيفترياكسون,Rocephin,سيفترياكسون|سفترياكسون|روسيفين|سيفترياكسن,2000,0
+ciprofloxacin,سيبروفلوكساسين,Ciprobay|Cipro,سيبروفلوكساسين|سيبرو|سيبروباي|سيبروفلوكساسن,750,0
+metronidazole,ميترونيدازول,Flagyl,ميترونيدازول|فلاجيل|ميترونيدازل,500,0
+vancomycin,فانكوميسين,Vancocin,فانكوميسين|فانكو|فانكومايسين,,0
+meropenem,ميروبينيم,Meronem,ميروبينيم|ميرونيم|ميروبنيم,2000,0
+piperacillin tazobactam,بيبيراسيلين تازوباكتام,Tazocin,تازوسين|بيبيراسيلين تازوباكتام|تازوسن,4500,0
+metformin,ميتفورمين,Glucophage|Glucophage XR,ميتفورمين|ميتفورمن|جلوكوفاج|جلوكوفاش|ميتفورمين,1000,0
+gliclazide,جليكلازيد,Diamicron,جليكلازيد|دياميكرون|جليكلازايد,120,0
+insulin glargine,انسولين جلارجين,Lantus|Toujeo,انسولين جلارجين|لانتوس|انسولين لانتوس|جلارجين,,0
+insulin human regular,انسولين عادي,Actrapid|Humulin R,انسولين عادي|انسولين سريع|اكتراپيد|اكتراد|اكتارابيد|هيومولين,,0
+insulin unspecified,انسولين (النوع غير محدد),,insulin|انسولين|أنسولين|الانسولين|إنسولين,,1
+amlodipine,املوديبين,Norvasc|Amlor,املوديبين|املودبين|نورفاسك|املودين,10,0
+lisinopril,ليزينوبريل,Zestril|Prinivil,ليزينوبريل|زيستريل|ليزينوبريل,40,0
+losartan,لوسارتان,Cozaar,لوسارتان|كوزار|لوزارتان,100,0
+valsartan,فالسارتان,Diovan,فالسارتان|ديوفان|فالزارتان,320,0
+bisoprolol,بيسوبرولول,Concor,بيسوبرولول|كونكور|بيزوبرولول,10,0
+metoprolol,ميتوبرولول,Betaloc|Lopressor,ميتوبرولول|بيتالوك|ميتوبرولل,200,0
+atenolol,اتينولول,Tenormin,اتينولول|تينورمين|اتينلول,100,0
+furosemide,فيوروسيميد,Lasix,فيوروسيميد|فروسميد|لازكس|لاسكس|فيروسيمايد,200,0
+spironolactone,سبيرونولاكتون,Aldactone,سبيرونولاكتون|الداكتون|سبايرونولاكتون,200,0
+digoxin,ديجوكسين,Lanoxin,ديجوكسين|ديجوكسن|لانوكسين|ديقوكسين,0.5,0
+nitroglycerin,نيتروجليسرين,GTN|Nitrolingual,gtn|glyceryl trinitrate|نيتروجليسرين|نايتروجلسرين|نيتروجلسرين,,0
+atorvastatin,اتورفاستاتين,Lipitor,اتورفاستاتين|ليبيتور|اتورفاستاتن,80,0
+rosuvastatin,روسوفاستاتين,Crestor,روسوفاستاتين|كريستور|روزوفاستاتين,40,0
+aspirin,اسبرين,Cardiprin|Ecotrin,اسبرين|أسبرين|كارديبرين|اسبيرين,1000,0
+clopidogrel,كلوبيدوجريل,Plavix,كلوبيدوجريل|كلوبيدوقريل|بلافيكس|كلوبيدوغريل,600,0
+warfarin,وارفارين,Coumadin|Marevan,وارفارين|كومادين|وارفرين,10,0
+enoxaparin,انوكسابارين,Clexane|Lovenox,انوكسابارين|كليكسان|انوكسبارين|لوفينوكس,150,0
+heparin,هيبارين,Heparin,هيبارين|هيبرين,,0
+tranexamic acid,حمض الترانيكساميك,Cyklokapron,ترانيكساميك|حمض الترانيكساميك|سايكلوكابرون|ترانيكسامك,1500,0
+omeprazole,اوميبرازول,Losec|Prilosec,اوميبرازول|اوميبرازل|لوسيك,40,0
+esomeprazole,ايزوميبرازول,Nexium,ايزوميبرازول|اسوميبرازول|نيكسيوم|ايسوميبرازول,40,0
+pantoprazole,بانتوبرازول,Controloc|Protonix,بانتوبرازول|بانتوبرازل|كونترولوك,80,0
+ondansetron,اوندانسيترون,Zofran,اوندانسيترون|اوندانسترون|زوفران,16,0
+metoclopramide,ميتوكلوبراميد,Primperan|Plasil,ميتوكلوبراميد|ميتوكلوبرامايد|بريمبران,10,0
+lactulose,لاكتولوز,Duphalac,لاكتولوز|دوفالاك|لاكتيولوز,,0
+salbutamol,سالبيوتامول,Ventolin,albuterol|سالبيوتامول|سالبوتامول|فنتولين|فينتولين|ألبيوترول,,0
+budesonide formoterol,بوديسونيد فورموتيرول,Symbicort,سيمبيكورت|سيمبيكورد|بوديسونيد فورموتيرول,,0
+prednisolone,بريدنيزولون,Deltacortril|Predsol,بريدنيزولون|بردنيزولون|بريدنزولون,60,0
+dexamethasone,ديكساميثازون,Decadron,ديكساميثازون|ديكساميثاسون|ديكساميتازون,20,0
+hydrocortisone,هيدروكورتيزون,Solu-Cortef,هيدروكورتيزون|هيدروكورتيزن|سولوكورتيف,200,0
+cetirizine,سيتيريزين,Zyrtec,سيتيريزين|سيتريزين|زيرتك,20,0
+loratadine,لوراتادين,Claritin,لوراتادين|لوراتادن|كلاريتين,10,0
+diphenhydramine,ديفينهيدرامين,Benadryl,ديفينهيدرامين|بنادريل|ديفن هيدرامين,50,0
+diazepam,ديازيبام,Valium,ديازيبام|فاليوم|ديازيبم,10,0
+midazolam,ميدازولام,Dormicum,ميدازولام|دورميكوم|ميدازلام,10,0
+levetiracetam,ليفيتيراسيتام,Keppra,ليفيتيراسيتام|كيبرا|ليفيتيراسيتم,1500,0
+levothyroxine,ليفوثيروكسين,Euthyrox|Eltroxin,ليفوثيروكسين|يوثيروكس|ايلتروكسين|ليفوثايروكسين,0.3,0
+adrenaline,ادرينالين,Adrenaline|EpiPen,epinephrine|epi|ادرينالين|أدرينالين|ابينفرين|ابي بن,1,0
+naloxone,نالوكسون,Narcan,نالوكسون|نالوكسن|ناركان,2,0
+potassium chloride,كلوريد البوتاسيوم,KCl|Slow-K,kcl|potassium|كلوريد البوتاسيوم|بوتاسيوم|بوتاسيوم كلورايد,,0
+sodium chloride 0.9%,محلول ملحي,Normal saline|NS,normal saline|saline|ns|محلول ملحي|نورمال سالين|سلاين|ملح وريدي,,0
+dextrose 5%,محلول دكستروز,D5W,d5w|dextrose|دكستروز|محلول سكر|محلول دكستروز,,0

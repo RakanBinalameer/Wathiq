@@ -1,0 +1,7 @@
+instance/
+training/out/
+models/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env

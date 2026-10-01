@@ -1,0 +1,10 @@
+Flask>=3.0
+Flask-WTF>=1.2
+Flask-Login>=0.6
+Flask-Limiter>=3.5
+Flask-Talisman>=1.1
+Flask-Compress>=1.14
+RapidFuzz>=3.6
+gunicorn>=21.2
+# optional, server-side speech-to-text (set WHISPER_MODEL): faster-whisper
+# dev: pytest
