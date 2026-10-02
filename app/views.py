@@ -6,7 +6,7 @@ from flask import Blueprint, Response, abort, current_app, jsonify, redirect, re
 from flask_login import UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import fhir, limiter, login_manager, stt
+from . import fhir, limiter, login_manager, sbar, stt
 from .db import audit, get_db
 from .extract import _TO_MG, analyze, allergy_drug_ids, drug_warnings
 
@@ -113,7 +113,12 @@ def note_detail(note_id):
         abort(404)
     if r["user_id"] != current_user.id:
         audit("note_view_other", f"id={note_id} ref={r['patient_ref']}", current_user.id)
-    return render_template("note.html", note=r, entities=json.loads(r["confirmed_json"]))
+    saved_sbar = None
+    sb_id = request.args.get("sbar", type=int)      # set by the save redirect; only the author's own report for this file shows
+    if sb_id:
+        saved_sbar = get_db().execute("SELECT id FROM sbar_reports WHERE id=? AND user_id=? AND patient_ref=?",
+                                      (sb_id, current_user.id, r["patient_ref"])).fetchone()
+    return render_template("note.html", note=r, entities=json.loads(r["confirmed_json"]), saved_sbar=saved_sbar)
 
 
 @bp.get("/patients")
@@ -141,8 +146,13 @@ def patient_page(ref):
         notes.append({"id": r["id"], "created_at": r["created_at"], "author": r["author"], "mine": r["user_id"] == current_user.id,
                       "drugs": sum(e["type"] == "drug" for e in ents), "dx": sum(e["type"] == "dx" for e in ents),
                       "vitals": sum(e["type"] == "vital" for e in ents)})
-    audit("patient_view", f"ref={ref} notes={len(notes)}", current_user.id)
-    return render_template("patient.html", ref=ref, notes=notes)
+    sbar_rows = get_db().execute(
+        "SELECT r.id, r.created_at, r.user_id, u.display_name AS author FROM sbar_reports r JOIN users u ON u.id = r.user_id "
+        "WHERE r.patient_ref=? ORDER BY r.id DESC LIMIT 200", (ref,)).fetchall()
+    handovers = [{"id": r["id"], "created_at": r["created_at"], "author": r["author"], "mine": r["user_id"] == current_user.id}
+                 for r in sbar_rows]
+    audit("patient_view", f"ref={ref} notes={len(notes)} sbar={len(handovers)}", current_user.id)
+    return render_template("patient.html", ref=ref, notes=notes, handovers=handovers)
 
 
 @bp.get("/kb")
@@ -250,13 +260,30 @@ def api_save_note():
     danger = [w["msg"] for c in cleaned for w in c["warnings"] if w["level"] == "danger"]
     if danger and data.get("acknowledged") is not True:
         return jsonify(error="توجد تنبيهات خطرة: أكّد مراجعتها أولاً", warnings=danger), 409
+    sbar_body = None
+    raw_sbar = data.get("sbar")                     # optional: an SBAR hand-over saved together with this note
+    if raw_sbar is not None:
+        if not isinstance(raw_sbar, dict):
+            return jsonify(error="بيانات SBAR غير صالحة", sbar=True), 400
+        sbar_body, err = _validate_sbar(raw_sbar.get("sections"), raw_sbar.get("vitals", []),
+                                        raw_sbar.get("confirmed"), raw_sbar.get("no_names"))
+        if err:
+            return jsonify(error=err[0], sbar=True), err[1]
     db = get_db()
     cur = db.execute(
         "INSERT INTO notes(user_id, patient_ref, allergies, transcript, confirmed_json) VALUES (?,?,?,?,?)",
         (current_user.id, patient_ref, allergies, transcript.strip(), json.dumps(cleaned, ensure_ascii=False)))
+    sbar_id = None
+    if sbar_body is not None:                       # same transaction: both are saved or neither
+        sbar_id = db.execute("INSERT INTO sbar_reports(user_id, patient_ref, transcript, sbar_json) VALUES (?,?,?,?)",
+                             (current_user.id, patient_ref, transcript.strip(),
+                              json.dumps(sbar_body, ensure_ascii=False))).lastrowid
     db.commit()
     audit("note_saved", f"id={cur.lastrowid} entities={len(cleaned)} acked={bool(danger)}", current_user.id)
-    return jsonify(id=cur.lastrowid, url=url_for("main.note_detail", note_id=cur.lastrowid)), 201
+    if sbar_id:
+        audit("sbar_saved", f"id={sbar_id} with_note={cur.lastrowid} " + _sbar_counts(sbar_body), current_user.id)
+    return jsonify(id=cur.lastrowid, sbar_id=sbar_id,
+                   url=url_for("main.note_detail", note_id=cur.lastrowid, sbar=sbar_id)), 201
 
 
 @bp.get("/api/notes/<int:note_id>/fhir")
@@ -271,6 +298,135 @@ def api_note_fhir(note_id):
     audit("fhir_export", f"id={note_id}{'' if r['user_id'] == current_user.id else ' other_author'}", current_user.id)
     return Response(body, mimetype="application/fhir+json",
                     headers={"Content-Disposition": f'attachment; filename="note-{note_id}.fhir.json"'})
+
+
+# ---------------------------------------------------------------- SBAR hand-over
+SBAR_MAX_ITEMS, SBAR_MAX_LEN = 30, 600
+
+
+@bp.post("/api/sbar/analyze")
+@login_required
+@limiter.limit("60 per minute")
+def api_sbar_analyze():
+    data = _json_body()
+    text = data.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return jsonify(error="النص مطلوب"), 400
+    if len(text) > 5000:
+        return jsonify(error="النص طويل جداً"), 400
+    k = kb()
+    res = sbar.split_sbar(text, lambda t: sum(e["type"] == "vital" for e in analyze(k, t)["entities"]))
+    vitals = []
+    for sec in ("S", "A"):                      # vital signs mentioned in Situation or Assessment
+        joined = " ".join(res["sections"][sec])
+        if not joined:
+            continue
+        for e in analyze(k, joined)["entities"]:
+            if e["type"] == "vital":
+                vitals.append({"section": sec, "kind": e["kind"], "label": e["label"], "value": e["value"], "unit": e["unit"],
+                               "text": e["text"], "status": e["status"], "warnings": e["warnings"]})
+    audit("sbar_analyze", f"chars={len(text)} mode={res['mode']} items={len(res['items'])}", current_user.id)  # never log text
+    return jsonify(mode=res["mode"], items=res["items"], vitals=vitals)
+
+
+def _clean_sbar_items(raw):
+    if not isinstance(raw, list) or len(raw) > SBAR_MAX_ITEMS:
+        return None
+    out = []
+    for t in raw:
+        if not isinstance(t, str):
+            return None
+        t = " ".join(t.split())
+        if t:
+            if len(t) > SBAR_MAX_LEN:
+                return None
+            out.append(t)
+    return out
+
+
+def _validate_sbar(sec, vit, confirmed, no_names):
+    """Shared by /api/sbar and /api/notes. -> (body, None) or (None, (message, http_status))."""
+    if not isinstance(sec, dict) or not isinstance(vit, list) or len(vit) > 20:
+        return None, ("بيانات غير صالحة", 400)
+    clean = {}
+    for key in sbar.SECTIONS:
+        items = _clean_sbar_items(sec.get(key, []))
+        if items is None:
+            return None, ("بيانات غير صالحة", 400)
+        clean[key] = items
+    if not any(clean.values()):
+        return None, ("التقرير فارغ", 400)
+    if confirmed is not True:
+        return None, ("أكّد مراجعتك للأقسام الأربعة أولاً", 409)
+    if no_names is not True:
+        return None, ("أكّد أن نص التقييم والتوصيات لا يحتوي اسم المريض", 409)
+    vitals = []
+    for e in vit:
+        if not isinstance(e, dict) or e.get("type", "vital") != "vital":
+            return None, ("بيانات غير صالحة", 400)
+        c, err = _clean_entity(kb(), {**e, "type": "vital"}, {}, {})
+        if err:
+            return None, (err, 400)
+        vitals.append(c)
+    return {**clean, "vitals": vitals}, None
+
+
+def _sbar_counts(body):
+    return " ".join(f"{k}={len(body[k])}" for k in sbar.SECTIONS) + f" vitals={len(body['vitals'])}"
+
+
+@bp.post("/api/sbar")
+@login_required
+@limiter.limit("30 per minute")
+def api_sbar_save():
+    data = _json_body()
+    transcript = data.get("transcript")
+    patient_ref = (data.get("patient_ref") or "").strip()
+    if not isinstance(transcript, str) or not transcript.strip() or len(transcript) > 5000:
+        return jsonify(error="النص مطلوب"), 400
+    if not PATIENT_REF_RE.match(patient_ref):
+        return jsonify(error="رقم الملف يقبل أحرفاً وأرقاماً فقط (بدون اسم المريض)"), 400
+    body, err = _validate_sbar(data.get("sections"), data.get("vitals", []), data.get("confirmed"), data.get("no_names"))
+    if err:
+        return jsonify(error=err[0]), err[1]
+    db = get_db()
+    cur = db.execute("INSERT INTO sbar_reports(user_id, patient_ref, transcript, sbar_json) VALUES (?,?,?,?)",
+                     (current_user.id, patient_ref, transcript.strip(), json.dumps(body, ensure_ascii=False)))
+    db.commit()
+    audit("sbar_saved", f"id={cur.lastrowid} " + _sbar_counts(body), current_user.id)
+    return jsonify(id=cur.lastrowid, url=url_for("main.sbar_detail", report_id=cur.lastrowid)), 201
+
+
+def _sbar_row(report_id):
+    r = get_db().execute(
+        "SELECT r.*, u.display_name AS author FROM sbar_reports r JOIN users u ON u.id = r.user_id WHERE r.id=?",
+        (report_id,)).fetchone()
+    if not r:
+        abort(404)
+    return r
+
+
+@bp.get("/sbar/<int:report_id>")
+@login_required
+def sbar_detail(report_id):
+    r = _sbar_row(report_id)
+    if r["user_id"] != current_user.id:
+        audit("sbar_view_other", f"id={report_id} ref={r['patient_ref']}", current_user.id)
+    return render_template("sbar_view.html", r=r, s=json.loads(r["sbar_json"]), titles=SBAR_TITLES)
+
+
+SBAR_TITLES = {"S": "الموقف (Situation)", "B": "الخلفية (Background)", "A": "التقييم (Assessment)", "R": "التوصيات (Recommendation)"}
+
+
+@bp.get("/api/sbar/<int:report_id>/fhir")
+@login_required
+@limiter.limit("30 per minute")
+def api_sbar_fhir(report_id):
+    r = _sbar_row(report_id)
+    body = fhir.dumps(fhir.sbar_to_bundle(r, json.loads(r["sbar_json"])))
+    audit("sbar_fhir_export", f"id={report_id}{'' if r['user_id'] == current_user.id else ' other_author'}", current_user.id)
+    return Response(body, mimetype="application/fhir+json",
+                    headers={"Content-Disposition": f'attachment; filename="sbar-{report_id}.fhir.json"'})
 
 
 @bp.get("/api/kb/search")
