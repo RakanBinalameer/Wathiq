@@ -154,9 +154,12 @@
     if (pos < text.length) box.append(text.slice(pos));
   }
 
-  // the "no dose extracted" warning goes away once the nurse has typed a dose herself
+  // dose warnings go away once the nurse has dealt with them herself: typed a dose / chosen a unit
   function currentWarnings(it) {
-    return it.removed ? [] : it.warnings.filter((w) => !(w.code === "no_dose" && it.dose));
+    return it.removed ? [] : it.warnings.filter((w) =>
+      !(w.code === "no_dose" && it.dose) &&
+      !(w.code === "no_unit" && it.dose && it.dose.unit) &&
+      !(w.code === "unit_assumed" && it.unitTouched));
   }
 
   function focusRow(id) {
@@ -213,7 +216,7 @@
         h("div", {}, h("label", { for: `dv-${it.id}` }, "الجرعة"),
           h("input", { id: `dv-${it.id}`, type: "number", min: "0", step: "any", inputmode: "decimal", value: dose.value, dir: "ltr",
             onchange: (e) => { const v = parseFloat(e.target.value); it.dose = v > 0 ? { value: v, unit: (it.dose || dose).unit } : null; it.confirmed = false; refresh(); } })),
-        h("div", {}, h("label", {}, "الوحدة"), select(UNITS, dose.unit, (v) => { if (it.dose) { it.dose.unit = v || "mg"; it.confirmed = false; refresh(); } }, "وحدة الجرعة", "mg")),
+        h("div", {}, h("label", {}, "الوحدة"), select(UNITS, dose.unit, (v) => { if (it.dose) { it.dose.unit = v || null; it.unitTouched = true; it.confirmed = false; refresh(); } }, "وحدة الجرعة", dose.unit ? "mg" : "اختر الوحدة")),
         h("div", {}, h("label", {}, "الطريقة"), select(ROUTES, it.route, (v) => { it.route = v; }, "طريقة الإعطاء")),
         h("div", {}, h("label", {}, "التكرار"), select(FREQS, it.freq, (v) => { it.freq = v; }, "التكرار"))));
     }
@@ -285,9 +288,11 @@
     const dangers = document.querySelectorAll("#alerts li").length > 0 && !$("alerts").hidden;
     const ackOk = !dangers || $("ack").checked;
     $("stale").hidden = !stale;
-    $("save").disabled = stale || pending > 0 || !refOk || !ackOk;
+    const noUnit = kept.some((i) => i.type === "drug" && i.dose && !i.dose.unit); // the server refuses a dose without a unit
+    $("save").disabled = stale || pending > 0 || noUnit || !refOk || !ackOk;
     $("save-hint").textContent = stale ? "أعد التحليل بعد تعديل النص." :
       pending > 0 ? `أكّد ${pending} عنصراً قبل الحفظ.` :
+      noUnit ? "اختر وحدة الجرعة لكل دواء قبل الحفظ." :
       !refOk ? "أدخل رقم الملف (أحرف وأرقام فقط) لتفعيل الحفظ." :
       !ackOk ? "أكّد مراجعة التنبيهات الخطرة." : "جاهز للحفظ.";
     setStep($("save").disabled ? 2 : 3);

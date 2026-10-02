@@ -93,3 +93,48 @@ def test_real_valium_spellings_still_match(kb):
     for t in ("اعطيت فاليوم 5 ملغ", "اعطيت ڤاليوم 5 ملغ", "اعطيت ديازيبام 5 ملغ", "gave diazepam 5 mg"):
         d = ents(kb, t, type_="drug")
         assert d and d[0]["match"]["label"] == "diazepam", t
+
+
+# ---- a number straight after the drug name, with no unit ("فيوروسيمايد 40 وريدي") ------------------
+
+def _drug(kb, text):
+    return ents(kb, text, type_="drug")[0]
+
+
+def test_bare_number_is_read_as_dose_with_unit_inferred_from_kb_limit(kb):
+    d = _drug(kb, "اعطيت فيوروسيمايد 40 وريدي")
+    dose = d["attrs"]["dose"]
+    assert (dose["value"], dose["unit"], dose["unit_missing"]) == (40.0, "mg", True)
+    assert d["status"] == "review" and any(w.get("code") == "unit_assumed" for w in d["warnings"])
+    # 1 with a 1000 mg limit can only be grams; 500 can only be mg
+    assert _drug(kb, "اعطيت بنادول 1 وريدي")["attrs"]["dose"]["unit"] == "g"
+    assert _drug(kb, "اعطيت بنادول 500")["attrs"]["dose"]["unit"] == "mg"
+
+
+def test_ambiguous_or_unknown_unit_is_left_blank_and_flagged(kb):
+    d = _drug(kb, "اعطيت بنادول 10 وريدي")  # 10 mg is implausibly low, 10 g far above the limit
+    assert d["attrs"]["dose"]["unit"] is None and d["status"] == "review"
+    assert any(w.get("code") == "no_unit" for w in d["warnings"])
+    d = _drug(kb, "اعطيت هيبارين 5000 وريدي")  # no dose limit in the KB for heparin
+    assert d["attrs"]["dose"]["unit"] is None
+
+
+def test_numbers_that_are_not_doses_are_ignored(kb):
+    for t in ("اعطيت بنادول 3 مرات يوميا", "اعطيت اموكسيسيلين 5 ايام", "اعطيت بنادول 40%", "paracetamol 3 times daily"):
+        d = _drug(kb, t)
+        assert d["attrs"]["dose"] is None and any(w.get("code") == "no_dose" for w in d["warnings"]), t
+
+
+def test_explicit_unit_is_unchanged(kb):
+    d = _drug(kb, "اعطيت فيوروسيمايد 40 ملغ وريدي")
+    assert "unit_missing" not in d["attrs"]["dose"] and d["attrs"]["dose"]["unit"] == "mg"
+
+
+def test_server_refuses_to_save_a_dose_without_unit(client, kb):
+    did = kb.exact("drug", "باراسيتامول")[0]
+    body = {"patient_ref": "100234", "transcript": "اعطيت بنادول 10", "allergies": "", "acknowledged": False,
+            "entities": [{"type": "drug", "text": "بنادول", "match_id": did, "dose": {"value": 10, "unit": None}}]}
+    r = client.post("/api/notes", json=body, headers={"X-CSRFToken": client.csrf})
+    assert r.status_code == 400 and "جرعة غير صالحة" in r.get_json()["error"]
+    body["entities"][0]["dose"] = {"value": 10, "unit": "mg"}
+    assert client.post("/api/notes", json=body, headers={"X-CSRFToken": client.csrf}).status_code == 201

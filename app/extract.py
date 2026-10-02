@@ -167,6 +167,35 @@ def parse_dose(seg: str):
             "mg": num * _TO_MG[unit] if unit in _TO_MG else None}
 
 
+# A bare number straight after the drug name ("فيوروسيمايد 40 وريدي") is a dose without a unit, unless it is
+# followed by a time/frequency word ("3 مرات", "5 ايام"), a percent, a ratio or a decimal continuation.
+_NOT_DOSE = (r"ساع|مر[هة]|مرات|يوم|ايام|اسبوع|اسابيع|شهر|اشهر|دقيق|دقائق|ثانيه|سن[هة]|سنوات|"
+             r"h\b|hrs?\b|hours?|times?|days?|weeks?|months?|x\b")
+_BARE_DOSE_RE = re.compile(r"^\s*(?:بجرعه|جرعه|dose(?:\s+of)?)?\s*(\d+(?:\.\d+)?)(?![\d/:%]|\.\d)(?!\s*(?:" + _NOT_DOSE + r"))")
+_BARE_FACTORS = (("mcg", 0.001), ("mg", 1.0), ("g", 1000.0))
+_PLAUSIBLE_LOW = 50  # a usual dose is rarely below max_single_dose / 50; PROVISIONAL, for the clinical team to tune
+
+
+def _suggest_unit(kb, did, value):
+    """Unit that keeps `value` inside (max_single_dose/50 .. max_single_dose], only if exactly one does.
+    Uses the KB's own dose limit as a plausibility check. Returns None when unknown or ambiguous."""
+    mx = kb.drugs[did]["max_single_dose_mg"]
+    if not mx:
+        return None
+    ok = [u for u, f in _BARE_FACTORS if mx / _PLAUSIBLE_LOW <= value * f <= mx]
+    return ok[0] if len(ok) == 1 else None
+
+
+def parse_bare_dose(kb, did, seg):
+    m = _BARE_DOSE_RE.search(seg)
+    if not m:
+        return None
+    v = float(m.group(1))
+    unit = _suggest_unit(kb, did, v)
+    return {"value": v, "unit": unit, "text": m.group(1), "unit_missing": True,
+            "mg": v * _TO_MG[unit] if unit else None}
+
+
 def parse_route(seg):
     for code, pat in ROUTES:
         if re.search(pat, seg):
@@ -414,7 +443,18 @@ def _drug_attrs(kb, ent, text, nt, h, hits, idx, hit_starts, allergy_ids, allerg
         dose = dose or parse_dose(pre)
         route = route or parse_route(pre)
         freq = freq or parse_freq(pre)
+    if not dose:
+        dose = parse_bare_dose(kb, h["ids"][0], seg)
     ent["attrs"] = {"dose": dose, "route": route, "freq": freq, "prn": bool(PRN_RE.search(seg))}
+    if dose and dose.get("unit_missing"):
+        # never auto-confirmed: a wrong unit is a 1000x error. The server also refuses to save a dose without a unit.
+        ent["status"] = "review"
+        if dose["unit"]:
+            ent["warnings"].append({"level": "warn", "code": "unit_assumed",
+                                    "msg": f"الوحدة غير مذكورة — افترضنا {dose['unit']} من الحد المعتاد للدواء. تأكد"})
+        else:
+            ent["warnings"].append({"level": "warn", "code": "no_unit",
+                                    "msg": f"الرقم {dose['text']} بدون وحدة — اختر الوحدة (mg / g / mcg …)"})
     if not dose:
         # a drug without a dose must never be auto-confirmed: the nurse either types it or confirms it was not stated
         ent["status"] = "review"
