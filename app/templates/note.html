@@ -3,7 +3,6 @@
 {% block content %}
 <section class="page">
   <p><a href="{{ url_for('main.index') }}">← الرجوع</a></p>
-  {% if saved_sbar %}<p class="alert ok" role="status">حُفظ مع هذه الملاحظة تقرير تسليم SBAR. <a href="{{ url_for('main.sbar_detail', report_id=saved_sbar.id) }}">فتح التقرير</a></p>{% endif %}
   <h1>ملاحظة المريض <span dir="ltr">{{ note.patient_ref }}</span></h1>
   <p class="hint">كتبها: {{ note.author }} · <a href="{{ url_for('main.patient_page', ref=note.patient_ref) }}">كل ملاحظات هذا الملف</a></p>
   <p class="hint">{{ note.created_at|local }}{% if note.allergies %} · الحساسية: {{ note.allergies }}{% endif %}</p>

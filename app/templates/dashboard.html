@@ -61,7 +61,6 @@
     </div>
     <div id="result" hidden>
       <p id="stale" class="alert warn" role="status" hidden>تغيّر النص بعد التحليل. أعد التحليل قبل الحفظ.</p>
-      <div id="tabp-note">
       <div id="summary" class="summary"></div>
       <p id="annotated" class="annotated" aria-label="النص مع المصطلحات المتعرَّف عليها"></p>
       <ul class="legend" aria-label="دليل الألوان">
@@ -70,22 +69,8 @@
       <div id="hints" class="hints" hidden></div>
       <div id="entities"></div>
       <div id="alerts" class="alert danger" role="alert" hidden></div>
-      </div>
-      <section id="tabp-sbar" class="sb-section" aria-labelledby="h-sbar">
-        <h3 id="h-sbar">تسليم SBAR</h3>
-        <p class="hint">نفس النص يُقسَّم إلى: الموقف، الخلفية، التقييم، التوصية. التقسيم بقواعد وليس ذكاءً توليدياً، وتراجعه أنت. لا يُحفظ شيء منه إلا إذا فعّلت خيار الحفظ أسفل الصفحة.</p>
-        <p id="sb-msg" class="alert warn" role="status" hidden></p>
-        <div id="sb-vwarn" class="alert warn" role="status" hidden></div>
-        <div id="sb-cards"></div>
-        <div id="sb-vitals" class="sb-vitals" hidden></div>
-      </section>
       <div class="savebar">
         <label class="ack" id="ack-wrap" hidden><input type="checkbox" id="ack"> راجعتُ التنبيهات الخطرة أعلاه وأتحمّل مسؤولية الحفظ.</label>
-        <label class="sb-ack"><input type="checkbox" id="sb-include" disabled> احفظ معها تقرير تسليم SBAR (راجعه في قسم «تسليم SBAR» أعلاه).</label>
-        <div id="sb-acks" hidden>
-          <label class="sb-ack"><input type="checkbox" id="sb-ok-review"> راجعتُ أقسام SBAR الأربعة وأؤكد صحتها.</label>
-          <label class="sb-ack"><input type="checkbox" id="sb-ok-names"> لا يحتوي نص التقييم والتوصيات على اسم المريض.</label>
-        </div>
         <button id="save" class="btn primary wide" type="button" disabled>حفظ الملاحظة المؤكَّدة</button>
         <p id="save-hint" class="hint"></p>
       </div>
@@ -122,4 +107,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='sbar_core.js') }}?v=1" defer></script><script src="{{ url_for('static', filename='app.js') }}?v=6" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=4" defer></script>{% endblock %}

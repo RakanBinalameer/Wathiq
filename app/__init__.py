@@ -110,9 +110,6 @@ def _ensure_db(app):
     """First run convenience: build the KB + a demo nurse so `flask run` just works."""
     path = Path(app.config["DATABASE"])
     if path.exists():
-        con = dbmod.connect(str(path))      # existing DB: add any tables introduced later (all statements are IF NOT EXISTS)
-        dbmod.init_schema(con)
-        con.close()
         return
     from .seed import build_kb, create_user
     con, stats = build_kb(str(path), app.config["DATA_DIR"])

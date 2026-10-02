@@ -164,54 +164,5 @@ def note_to_bundle(note, entities, kb=None):
             "identifier": {"system": SYS_NOTE, "value": str(nid)}, "entry": entries}
 
 
-SYS_SBAR = "urn:nursevoice:sbar"
-LOINC_EVAL_NOTE = ("51848-0", "Evaluation note")      # checked on loinc.org: long name "Evaluation note"
-LOINC_PLAN_NOTE = ("18776-5", "Plan of care note")
-
-
-def sbar_to_bundle(report, sbar):
-    """Export a confirmed SBAR hand-over (Bundle type "collection").
-
-    Mapping (design decision, to be reviewed with the clinical/terminology team):
-      Assessment     -> one Observation per statement (category "exam", LOINC 51848-0, valueString = the nurse's text),
-                        plus an Observation per structured vital sign found in Situation/Assessment (KB-free, LOINC).
-      Recommendation -> ONE CarePlan (status draft, intent proposal: a nurse's suggestion, not an order),
-                        one activity.detail per statement.
-    Situation and Background are NOT exported. The patient is identified by file number only.
-    Assessment/Recommendation are free text the nurse typed: they may contain a name, which cannot be detected here.
-    The nurse must confirm that they do not before saving.
-    report: row/dict with id, patient_ref, created_at. sbar: {"A": [str], "R": [str], "vitals": [cleaned vital entities]}.
-    """
-    rid = f"sbar{report['id']}"
-    when = _iso(report["created_at"])
-    pat_id = _uid(rid, "patient")
-    pat_url = f"urn:uuid:{pat_id}"
-    entries = [{"fullUrl": pat_url, "resource": {
-        "resourceType": "Patient", "id": pat_id,
-        "identifier": [{"system": SYS_PATIENT_REF, "value": report["patient_ref"]}]}}]
-
-    def put(res):
-        entries.append({"fullUrl": f"urn:uuid:{res['id']}", "resource": res})
-
-    for i, text in enumerate(sbar.get("A", [])):
-        put({"resourceType": "Observation", "id": _uid(rid, "assess", i), "status": "final",
-             "category": [{"coding": [{"system": SYS_OBS_CAT, "code": "exam", "display": "Exam"}]}],
-             "code": {"coding": [{"system": SYS_LOINC, "code": LOINC_EVAL_NOTE[0], "display": LOINC_EVAL_NOTE[1]}],
-                      "text": "SBAR Assessment (nursing)"},
-             "subject": {"reference": pat_url}, "effectiveDateTime": when, "valueString": text})
-    for i, v in enumerate(sbar.get("vitals", [])):
-        res = _vital(rid, i, v, pat_url, when)
-        if res:
-            put(res)
-    recs = sbar.get("R", [])
-    if recs:
-        put({"resourceType": "CarePlan", "id": _uid(rid, "careplan"), "status": "draft", "intent": "proposal",
-             "category": [{"coding": [{"system": SYS_LOINC, "code": LOINC_PLAN_NOTE[0], "display": LOINC_PLAN_NOTE[1]}]}],
-             "title": "SBAR Recommendation (nursing hand-over)", "subject": {"reference": pat_url}, "created": when,
-             "activity": [{"detail": {"status": "not-started", "description": t}} for t in recs]})
-    return {"resourceType": "Bundle", "id": _uid(rid, "bundle"), "type": "collection", "timestamp": when,
-            "identifier": {"system": SYS_SBAR, "value": str(report["id"])}, "entry": entries}
-
-
 def dumps(bundle):
     return json.dumps(bundle, ensure_ascii=False, indent=2)

@@ -20,21 +20,5 @@
   {% else %}
   <p class="hint">لا توجد ملاحظات محفوظة لهذا الرقم.</p>
   {% endif %}
-  <h2>تقارير تسليم SBAR</h2>
-  {% if handovers %}
-  <ul class="note-list">
-    {% for h in handovers %}
-    <li>
-      <a href="{{ url_for('main.sbar_detail', report_id=h.id) }}">
-        <strong>{{ h.author }}{% if h.mine %} (أنت){% endif %}</strong>
-        <span>{{ h.created_at|local }}</span>
-        <span class="counts">تسليم SBAR</span>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="hint">لا توجد تقارير تسليم SBAR لهذا الرقم.</p>
-  {% endif %}
 </section>
 {% endblock %}

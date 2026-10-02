@@ -8,7 +8,7 @@
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}وثّق{% endblock %}</title>
   <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=6">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
 </head>
 <body>
   <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
@@ -24,7 +24,6 @@
     <nav aria-label="التنقل الرئيسي">
       {% if current_user.is_authenticated %}
         <a href="{{ url_for('main.index') }}" {% if request.endpoint == 'main.index' %}aria-current="page"{% endif %}>الإملاء</a>
-        <a href="{{ url_for('main.sbar_page') }}" {% if request.endpoint == 'main.sbar_page' %}aria-current="page"{% endif %}>تسليم SBAR</a>
         <a href="{{ url_for('main.kb_page') }}" {% if request.endpoint == 'main.kb_page' %}aria-current="page"{% endif %}>قاعدة المعرفة</a>
       {% endif %}
       <a href="{{ url_for('main.about') }}" {% if request.endpoint == 'main.about' %}aria-current="page"{% endif %}>كيف يعمل؟</a>

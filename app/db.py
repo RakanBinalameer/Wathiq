@@ -28,12 +28,6 @@ CREATE TABLE IF NOT EXISTS notes(
   patient_ref TEXT, allergies TEXT, transcript TEXT NOT NULL,
   confirmed_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS ix_notes_user ON notes(user_id, id DESC);
-CREATE TABLE IF NOT EXISTS sbar_reports(
-  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
-  patient_ref TEXT NOT NULL, transcript TEXT NOT NULL,
-  sbar_json TEXT NOT NULL,           -- {"S":[..],"B":[..],"A":[..],"R":[..],"vitals":[..]} as confirmed by the nurse
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE INDEX IF NOT EXISTS ix_sbar_patient ON sbar_reports(patient_ref, id DESC);
 CREATE TABLE IF NOT EXISTS audit(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   user_id INTEGER, action TEXT NOT NULL, detail TEXT);
