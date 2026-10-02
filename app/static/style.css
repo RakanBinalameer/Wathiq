@@ -267,3 +267,8 @@ mark.hl,.ent.hl{box-shadow:0 0 0 3px var(--focus)}
 .sb-vitals h3{font-size:1rem;margin:0 0 6px}
 .sb-vitals label{display:flex;gap:8px;align-items:center;margin:4px 0}
 .sb-ack{display:flex;gap:8px;align-items:center;font-weight:600;margin:6px 0;min-height:var(--tap);cursor:pointer}
+
+.alert.ok{background:var(--vital-bg);color:var(--vital);border-color:var(--vital)}
+.tabs{display:flex;gap:6px;margin:6px 0 12px;border-bottom:1px solid var(--line)}
+.tab{font:inherit;font-weight:600;color:var(--muted);background:transparent;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;padding:6px 16px;min-height:var(--tap);cursor:pointer}
+.tab[aria-selected="true"]{color:var(--ink);background:var(--surface);border-color:var(--line);box-shadow:0 2px 0 var(--surface)}

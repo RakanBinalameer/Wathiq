@@ -8,7 +8,9 @@
   const FREQS = ["QD", "BID", "TID", "QID", "QHS", "STAT", "q4h", "q6h", "q8h", "q12h"];
   const UNITS = ["mg", "mcg", "g", "ml", "unit", "meq", "tab", "cap", "amp"];
 
-  const S = { items: [], hints: [], analyzedText: "", serverStt: false, rec: null, recording: false, chunks: [], needAck: false };
+  const S = { items: [], hints: [], analyzedText: "", serverStt: false, rec: null, recording: false, chunks: [], needAck: false, sbarOk: false };
+  // SBAR hand-over tab: same dictated text split into S/B/A/R; saved together with the note only if the nurse opts in
+  const sb = SbarPanel.create({ cards: $("sb-cards"), vitals: $("sb-vitals"), vwarn: $("sb-vwarn") }, () => { if (!$("result").hidden) updateSave(); });
 
   // ---- tiny DOM helper (never innerHTML: all text goes through textContent) -------------------
   function h(tag, props, ...kids) {
@@ -48,7 +50,7 @@
     if (!text) { setStatus("اكتب الملاحظة أو أملِها أولاً.", true); return; }
     setStatus("جارٍ التحليل…");
     $("analyze").disabled = true;
-    const r = await api("/api/analyze", { text, allergies: $("allergies").value });
+    const [r, rs] = await Promise.all([api("/api/analyze", { text, allergies: $("allergies").value }), api("/api/sbar/analyze", { text })]);
     $("analyze").disabled = false;
     if (!r.ok) { setStatus(r.data.error || "تعذّر التحليل، حاول مرة أخرى.", true); return; }
     const res = r.data;
@@ -65,10 +67,29 @@
       confirmed: e.status === "matched", removed: false,
     }));
     $("empty").hidden = true; $("result").hidden = false; $("stale").hidden = true;
+    loadSbar(rs);
     render(res.text);
     const s = res.summary;
     setStatus(s.drugs + s.dx + s.vitals === 0 ? "لم يُعثر على مصطلحات طبية معروفة في هذا النص." :
       `تم التعرف على ${s.drugs} أدوية، ${s.dx} تشخيصات، ${s.vitals} علامات حيوية.` + (s.review ? ` ${s.review} تحتاج مراجعتك.` : ""));
+  }
+
+  // a failure of the SBAR split never blocks the normal note: the tab just says so and the opt-in stays off
+  function loadSbar(rs) {
+    for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).checked = false;
+    S.sbarOk = rs.ok;
+    $("sb-include").disabled = !rs.ok;
+    if (rs.ok) { $("sb-msg").hidden = true; sb.load(rs.data); }
+    else { sb.clear(); $("sb-msg").textContent = rs.data.error || "تعذّر تقسيم SBAR. الملاحظة العادية غير متأثرة."; $("sb-msg").hidden = false; }
+  }
+
+  function showTab(which) {
+    for (const t of ["note", "sbar"]) {
+      const on = t === which;
+      $("tab-" + t).setAttribute("aria-selected", on ? "true" : "false");
+      $("tab-" + t).tabIndex = on ? 0 : -1;
+      $("tabp-" + t).hidden = !on;
+    }
   }
 
   // ---- rendering ----------------------------------------------------------------------------
@@ -289,12 +310,23 @@
     const ackOk = !dangers || $("ack").checked;
     $("stale").hidden = !stale;
     const noUnit = kept.some((i) => i.type === "drug" && i.dose && !i.dose.unit); // the server refuses a dose without a unit
-    $("save").disabled = stale || pending > 0 || noUnit || !refOk || !ackOk;
+    const withSbar = S.sbarOk && $("sb-include").checked;
+    $("sb-acks").hidden = !withSbar;
+    $("tab-sbar").textContent = withSbar ? "تسليم SBAR ✓" : "تسليم SBAR";
+    $("save").textContent = withSbar ? "حفظ الملاحظة وتقرير SBAR" : "حفظ الملاحظة المؤكَّدة";
+    let sbWhy = "";
+    if (withSbar) {
+      if (!sb.total()) sbWhy = "تقرير SBAR فارغ: أضف جملة في تبويب SBAR أو ألغِ خيار حفظه.";
+      else if (sb.pending()) sbWhy = `SBAR: ${sb.pending()} جملة تحتاج مراجعتك (تبويب «تسليم SBAR»).`;
+      else if (!$("sb-ok-review").checked || !$("sb-ok-names").checked) sbWhy = "SBAR: أكّد المراجعة وخلوّ النص من اسم المريض.";
+    }
+    $("save").disabled = stale || pending > 0 || noUnit || !refOk || !ackOk || !!sbWhy;
     $("save-hint").textContent = stale ? "أعد التحليل بعد تعديل النص." :
       pending > 0 ? `أكّد ${pending} عنصراً قبل الحفظ.` :
       noUnit ? "اختر وحدة الجرعة لكل دواء قبل الحفظ." :
       !refOk ? "أدخل رقم الملف (أحرف وأرقام فقط) لتفعيل الحفظ." :
-      !ackOk ? "أكّد مراجعة التنبيهات الخطرة." : "جاهز للحفظ.";
+      !ackOk ? "أكّد مراجعة التنبيهات الخطرة." :
+      sbWhy ? sbWhy : "جاهز للحفظ.";
     setStep($("save").disabled ? 2 : 3);
   }
 
@@ -305,11 +337,16 @@
       if (i.type === "dx") return { type: "dx", text: i.text, match_id: i.chosenId };
       return { type: "vital", text: i.text, kind: i.kind, label: i.label, value: i.value, unit: i.unit };
     });
-    const r = await api("/api/notes", {
+    const payload = {
       patient_ref: $("patient-ref").value.trim(), allergies: $("allergies").value, transcript: $("transcript").value,
       entities, acknowledged: $("ack").checked,
-    });
-    if (r.status === 201) { setStatus("تم حفظ الملاحظة."); location.href = r.data.url; return; }
+    };
+    if (S.sbarOk && $("sb-include").checked) {
+      payload.sbar = { sections: sb.sections(), vitals: sb.vitalsPayload(), confirmed: $("sb-ok-review").checked, no_names: $("sb-ok-names").checked };
+    }
+    const r = await api("/api/notes", payload);
+    if (r.status === 201) { setStatus(payload.sbar ? "تم حفظ الملاحظة وتقرير SBAR." : "تم حفظ الملاحظة."); location.href = r.data.url; return; }
+    if (r.data.sbar) { setStatus(r.data.error || "تعذّر حفظ تقرير SBAR، ولم تُحفظ الملاحظة.", true); updateSave(); return; }   // SBAR refused: nothing was saved
     if (r.status === 409) {
       S.needAck = true;
       S.items.forEach((i) => { i.warnings = i.warnings.filter((w) => w.level !== "danger"); });
@@ -393,6 +430,9 @@
   function clearAll() {
     $("transcript").value = ""; $("allergies").value = ""; $("patient-ref").value = "";
     S.items = []; S.hints = []; S.analyzedText = ""; S.needAck = false;
+    sb.clear(); S.sbarOk = false; showTab("note");
+    for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).checked = false;
+    $("sb-include").disabled = true; $("sb-msg").hidden = true;
     $("result").hidden = true; $("empty").hidden = false; setStatus("");
     setStep(1);
   }
@@ -403,6 +443,14 @@
     $("clear").addEventListener("click", clearAll);
     $("save").addEventListener("click", save);
     $("ack").addEventListener("change", updateSave);
+    for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).addEventListener("change", updateSave);
+    $("sb-include").addEventListener("change", () => { if ($("sb-include").checked) showTab("sbar"); });
+    for (const t of ["note", "sbar"]) {
+      $("tab-" + t).addEventListener("click", () => showTab(t));
+      $("tab-" + t).addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") { const o = t === "note" ? "sbar" : "note"; showTab(o); $("tab-" + o).focus(); }
+      });
+    }
     $("patient-ref").addEventListener("input", () => { if (!$("result").hidden) updateSave(); });
     $("transcript").addEventListener("input", () => { if (!$("result").hidden) updateSave(); });
     document.querySelectorAll("[data-sample]").forEach((b) => b.addEventListener("click", () => {

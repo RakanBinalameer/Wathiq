@@ -61,6 +61,11 @@
     </div>
     <div id="result" hidden>
       <p id="stale" class="alert warn" role="status" hidden>تغيّر النص بعد التحليل. أعد التحليل قبل الحفظ.</p>
+      <div class="tabs" role="tablist" aria-label="عرض التحليل">
+        <button id="tab-note" class="tab" role="tab" type="button" aria-selected="true" aria-controls="tabp-note">الملاحظة</button>
+        <button id="tab-sbar" class="tab" role="tab" type="button" aria-selected="false" aria-controls="tabp-sbar" tabindex="-1">تسليم SBAR</button>
+      </div>
+      <div id="tabp-note" role="tabpanel" aria-labelledby="tab-note">
       <div id="summary" class="summary"></div>
       <p id="annotated" class="annotated" aria-label="النص مع المصطلحات المتعرَّف عليها"></p>
       <ul class="legend" aria-label="دليل الألوان">
@@ -69,8 +74,21 @@
       <div id="hints" class="hints" hidden></div>
       <div id="entities"></div>
       <div id="alerts" class="alert danger" role="alert" hidden></div>
+      </div>
+      <div id="tabp-sbar" role="tabpanel" aria-labelledby="tab-sbar" hidden>
+        <p class="hint">نفس النص يُقسَّم إلى: الموقف، الخلفية، التقييم، التوصية. التقسيم بقواعد وليس ذكاءً توليدياً، وتراجعه أنت. لا يُحفظ شيء منه إلا إذا فعّلت خيار الحفظ أسفل الصفحة.</p>
+        <p id="sb-msg" class="alert warn" role="status" hidden></p>
+        <div id="sb-vwarn" class="alert warn" role="status" hidden></div>
+        <div id="sb-cards"></div>
+        <div id="sb-vitals" class="sb-vitals" hidden></div>
+      </div>
       <div class="savebar">
         <label class="ack" id="ack-wrap" hidden><input type="checkbox" id="ack"> راجعتُ التنبيهات الخطرة أعلاه وأتحمّل مسؤولية الحفظ.</label>
+        <label class="sb-ack"><input type="checkbox" id="sb-include" disabled> احفظ معها تقرير تسليم SBAR (راجعه في تبويب «تسليم SBAR»).</label>
+        <div id="sb-acks" hidden>
+          <label class="sb-ack"><input type="checkbox" id="sb-ok-review"> راجعتُ أقسام SBAR الأربعة وأؤكد صحتها.</label>
+          <label class="sb-ack"><input type="checkbox" id="sb-ok-names"> لا يحتوي نص التقييم والتوصيات على اسم المريض.</label>
+        </div>
         <button id="save" class="btn primary wide" type="button" disabled>حفظ الملاحظة المؤكَّدة</button>
         <p id="save-hint" class="hint"></p>
       </div>
@@ -107,4 +125,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=4" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='sbar_core.js') }}?v=1" defer></script><script src="{{ url_for('static', filename='app.js') }}?v=5" defer></script>{% endblock %}
