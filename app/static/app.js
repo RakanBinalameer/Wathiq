@@ -83,15 +83,6 @@
     else { sb.clear(); $("sb-msg").textContent = rs.data.error || "تعذّر تقسيم SBAR. الملاحظة العادية غير متأثرة."; $("sb-msg").hidden = false; }
   }
 
-  function showTab(which) {
-    for (const t of ["note", "sbar"]) {
-      const on = t === which;
-      $("tab-" + t).setAttribute("aria-selected", on ? "true" : "false");
-      $("tab-" + t).tabIndex = on ? 0 : -1;
-      $("tabp-" + t).hidden = !on;
-    }
-  }
-
   // ---- rendering ----------------------------------------------------------------------------
   function render(text) {
     renderAnnotated(text || S.analyzedText);
@@ -312,12 +303,11 @@
     const noUnit = kept.some((i) => i.type === "drug" && i.dose && !i.dose.unit); // the server refuses a dose without a unit
     const withSbar = S.sbarOk && $("sb-include").checked;
     $("sb-acks").hidden = !withSbar;
-    $("tab-sbar").textContent = withSbar ? "تسليم SBAR ✓" : "تسليم SBAR";
     $("save").textContent = withSbar ? "حفظ الملاحظة وتقرير SBAR" : "حفظ الملاحظة المؤكَّدة";
     let sbWhy = "";
     if (withSbar) {
-      if (!sb.total()) sbWhy = "تقرير SBAR فارغ: أضف جملة في تبويب SBAR أو ألغِ خيار حفظه.";
-      else if (sb.pending()) sbWhy = `SBAR: ${sb.pending()} جملة تحتاج مراجعتك (تبويب «تسليم SBAR»).`;
+      if (!sb.total()) sbWhy = "تقرير SBAR فارغ: أضف جملة في قسم SBAR أو ألغِ خيار حفظه.";
+      else if (sb.pending()) sbWhy = `SBAR: ${sb.pending()} جملة تحتاج مراجعتك (قسم «تسليم SBAR»).`;
       else if (!$("sb-ok-review").checked || !$("sb-ok-names").checked) sbWhy = "SBAR: أكّد المراجعة وخلوّ النص من اسم المريض.";
     }
     $("save").disabled = stale || pending > 0 || noUnit || !refOk || !ackOk || !!sbWhy;
@@ -430,7 +420,7 @@
   function clearAll() {
     $("transcript").value = ""; $("allergies").value = ""; $("patient-ref").value = "";
     S.items = []; S.hints = []; S.analyzedText = ""; S.needAck = false;
-    sb.clear(); S.sbarOk = false; showTab("note");
+    sb.clear(); S.sbarOk = false;
     for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).checked = false;
     $("sb-include").disabled = true; $("sb-msg").hidden = true;
     $("result").hidden = true; $("empty").hidden = false; setStatus("");
@@ -444,13 +434,6 @@
     $("save").addEventListener("click", save);
     $("ack").addEventListener("change", updateSave);
     for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).addEventListener("change", updateSave);
-    $("sb-include").addEventListener("change", () => { if ($("sb-include").checked) showTab("sbar"); });
-    for (const t of ["note", "sbar"]) {
-      $("tab-" + t).addEventListener("click", () => showTab(t));
-      $("tab-" + t).addEventListener("keydown", (e) => {
-        if (e.key === "ArrowLeft" || e.key === "ArrowRight") { const o = t === "note" ? "sbar" : "note"; showTab(o); $("tab-" + o).focus(); }
-      });
-    }
     $("patient-ref").addEventListener("input", () => { if (!$("result").hidden) updateSave(); });
     $("transcript").addEventListener("input", () => { if (!$("result").hidden) updateSave(); });
     document.querySelectorAll("[data-sample]").forEach((b) => b.addEventListener("click", () => {

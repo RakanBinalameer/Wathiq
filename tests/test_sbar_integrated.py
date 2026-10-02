@@ -83,8 +83,9 @@ def test_sbar_must_be_an_object(client, db_path):
     assert r.status_code == 400 and count(db_path, "notes", "700106") == 0
 
 
-def test_dictation_page_has_the_sbar_tab(client):
+def test_dictation_page_has_the_sbar_section(client):
     html = client.get("/").text
-    for needle in ('id="tab-sbar"', 'id="tabp-sbar"', 'id="sb-cards"', 'id="sb-include"', 'id="sb-ok-review"', 'id="sb-ok-names"', "sbar_core.js"):
+    assert 'role="tab"' not in html                                          # one view: no tabs to switch between
+    for needle in ('id="tabp-sbar"', 'id="sb-cards"', 'id="sb-include"', 'id="sb-ok-review"', 'id="sb-ok-names"', "sbar_core.js"):
         assert needle in html
     assert html.index("sbar_core.js") < html.index("app.js")                  # the panel must load before app.js uses it
