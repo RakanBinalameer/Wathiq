@@ -77,6 +77,42 @@
     updateSave();
   }
 
+  // flow stepper: 1 = dictate/write, 2 = review and confirm, 3 = ready to save
+  function setStep(n) {
+    document.querySelectorAll("#flow li").forEach((li, i) => {
+      li.classList.toggle("done", i + 1 < n);
+      li.classList.toggle("on", i + 1 === n);
+      if (i + 1 === n) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+    });
+  }
+
+  function renderSummary() {
+    const box = $("summary");
+    box.replaceChildren();
+    const kept = S.items.filter((i) => !i.removed);
+    const count = (t) => kept.filter((i) => i.type === t).length;
+    const pending = kept.filter((i) => !i.confirmed).length;
+    const dangers = kept.filter((i) => i.warnings.some((w) => w.level === "danger")).length;
+    const card = (num, label, cls) => h("div", { class: "sum-card" + (cls ? " " + cls : "") }, h("strong", {}, num), h("span", {}, label));
+    box.append(
+      card(count("drug"), "أدوية"), card(count("dx"), "تشخيصات"), card(count("vital"), "علامات حيوية"),
+      card(pending, "بانتظار تأكيدك", pending ? "review" : "ok"),
+      card(dangers, "تنبيهات خطرة", dangers ? "danger" : ""),
+      h("div", { class: "sum-progress" },
+        h("span", {}, `تم تأكيد ${kept.length - pending} من ${kept.length}`),
+        h("progress", { max: String(kept.length), value: String(kept.length - pending), "aria-label": "تقدّم تأكيد العناصر" })));
+  }
+
+  // row state: "ok" marks a confirmed row; has-warn / has-danger follow the warnings.
+  // CSS lets has-danger win, so a confirmed row with a danger warning stays red, never green.
+  function stateClass(it) {
+    if (it.removed) return " off";
+    const ws = currentWarnings(it);
+    return (it.confirmed ? " ok" : "") +
+      (ws.some((w) => w.level === "warn") ? " has-warn" : "") +
+      (ws.some((w) => w.level === "danger") ? " has-danger" : "");
+  }
+
   function renderAnnotated(text) {
     const box = $("annotated");
     box.replaceChildren();
@@ -114,11 +150,13 @@
   function renderEntities() {
     const root = $("entities");
     root.replaceChildren();
+    renderSummary();
     for (const type of ["drug", "dx", "vital"]) {
       const group = S.items.filter((i) => i.type === type);
       if (!group.length) continue;
       root.append(h("h3", { class: "group-title" }, `${GROUP_AR[type]} (${group.length})`));
-      for (const it of group) root.append(row(it));
+      if (type === "vital") root.append(h("div", { class: "vital-grid" }, group.map(vitalCard)));
+      else for (const it of group) root.append(row(it));
     }
     if (!S.items.length) root.append(h("p", { class: "hint" }, "لا توجد عناصر للمراجعة. يمكنك تعديل النص وإعادة التحليل."));
     renderAlerts();
@@ -126,18 +164,14 @@
 
   function row(it) {
     const needs = !it.confirmed && !it.removed;
-    const el = h("div", { class: `ent ${it.type}${needs ? " needs" : ""}${it.removed ? " off" : ""}`, "data-id": it.id });
+    const el = h("div", { class: `ent ${it.type}${needs ? " needs" : ""}${stateClass(it)}`, "data-id": it.id });
     const head = h("div", { class: "ent-head" }, h("span", { class: `pill ${it.type}` }, TYPE_AR[it.type]));
     head.append(h("span", { class: "found", dir: "auto" }, `«${it.text}»`));
-    if (it.type === "vital") {
-      head.append("←", h("span", { class: "name" }, it.label));
-    } else {
-      const m = currentMatch(it);
-      head.append("←", h("span", { class: "name", dir: "ltr" }, m.label));
-      if (m.label_ar) head.append(h("span", { class: "ar" }, m.label_ar));
-      if (m.code) head.append(h("span", { class: "code" }, `${m.code_system} ${m.code}`));
-      if (it.score < 100) head.append(h("span", { class: "hint" }, `تطابق ${it.score}%`));
-    }
+    const m = currentMatch(it);
+    head.append("←", h("span", { class: "name", dir: "ltr" }, m.label));
+    if (m.label_ar) head.append(h("span", { class: "ar" }, m.label_ar));
+    if (m.code) head.append(h("span", { class: "code" }, `${m.code_system} ${m.code}`));
+    if (it.score < 100) head.append(h("span", { class: "hint" }, `تطابق ${it.score}%`));
     el.append(head);
 
     if (it.alternatives.length > 1) {
@@ -156,22 +190,39 @@
         h("div", {}, h("label", {}, "الطريقة"), select(ROUTES, it.route, (v) => { it.route = v; }, "طريقة الإعطاء")),
         h("div", {}, h("label", {}, "التكرار"), select(FREQS, it.freq, (v) => { it.freq = v; }, "التكرار"))));
     }
-    if (it.type === "vital") {
-      el.append(h("div", { class: "attrs" }, h("div", {}, h("label", { for: `vv-${it.id}` }, `القيمة (${it.unit})`),
-        h("input", { id: `vv-${it.id}`, value: it.value, dir: "ltr", inputmode: "decimal", maxlength: "7",
-          onchange: (e) => { it.value = e.target.value.trim(); it.confirmed = false; refresh(); } }))));
-    }
+    appendFlags(el, it);
+    el.append(entFoot(it));
+    return el;
+  }
 
+  // a vital sign is a compact card inside .vital-grid: label, big value field, unit
+  function vitalCard(it) {
+    const needs = !it.confirmed && !it.removed;
+    const el = h("div", { class: `ent vital${needs ? " needs" : ""}${stateClass(it)}`, "data-id": it.id });
+    el.append(
+      h("span", { class: "vname" }, it.label),
+      h("span", { class: "vfound", dir: "auto" }, `«${it.text}»`),
+      h("div", { class: "vval" },
+        h("input", { id: `vv-${it.id}`, "aria-label": `${it.label} (${it.unit})`, value: it.value, dir: "ltr", inputmode: "decimal", maxlength: "7",
+          onchange: (e) => { it.value = e.target.value.trim(); it.confirmed = false; refresh(); } }),
+        h("span", { class: "unit" }, it.unit)));
+    appendFlags(el, it);
+    el.append(entFoot(it));
+    return el;
+  }
+
+  function appendFlags(el, it) {
     for (const w of currentWarnings(it)) el.append(h("span", { class: `flag ${w.level}`, role: w.level === "danger" ? "alert" : null }, w.msg));
+  }
 
+  function entFoot(it) {
     const foot = h("div", { class: "ent-foot" });
     if (!it.removed) {
       foot.append(h("label", {}, h("input", { type: "checkbox", checked: it.confirmed, onchange: (e) => { it.confirmed = e.target.checked; refresh(true); } }),
         it.status === "matched" && it.score >= 100 ? "صحيح" : "أؤكد أن هذا صحيح"));
     }
     foot.append(h("button", { class: "btn small", type: "button", onclick: () => { it.removed = !it.removed; refresh(); } }, it.removed ? "استعادة" : "إزالة"));
-    el.append(foot);
-    return el;
+    return foot;
   }
 
   function currentMatch(it) {
@@ -212,6 +263,7 @@
       pending > 0 ? `أكّد ${pending} عنصراً قبل الحفظ.` :
       !refOk ? "أدخل رقم الملف (أحرف وأرقام فقط) لتفعيل الحفظ." :
       !ackOk ? "أكّد مراجعة التنبيهات الخطرة." : "جاهز للحفظ.";
+    setStep($("save").disabled ? 2 : 3);
   }
 
   async function save() {
@@ -310,6 +362,7 @@
     $("transcript").value = ""; $("allergies").value = ""; $("patient-ref").value = "";
     S.items = []; S.analyzedText = ""; S.needAck = false;
     $("result").hidden = true; $("empty").hidden = false; setStatus("");
+    setStep(1);
   }
 
   document.addEventListener("DOMContentLoaded", () => {

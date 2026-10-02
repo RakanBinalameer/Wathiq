@@ -6,5 +6,6 @@ Flask-Talisman>=1.1
 Flask-Compress>=1.14
 RapidFuzz>=3.6
 gunicorn>=21.2
+tzdata
 # optional, server-side speech-to-text (set WHISPER_MODEL): faster-whisper
 # dev: pytest

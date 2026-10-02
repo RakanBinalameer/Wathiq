@@ -3,8 +3,14 @@
 {% block content %}
 <section class="login">
   <div class="login-copy">
+    <svg class="login-logo" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+      <rect x="1" y="7" width="3" height="6" rx="1.5"/><rect x="6" y="3" width="3" height="14" rx="1.5"/>
+      <rect x="11" y="0" width="3" height="20" rx="1.5"/><rect x="16" y="4" width="3" height="12" rx="1.5"/>
+      <rect x="21" y="8" width="3" height="5" rx="1.5"/>
+    </svg>
     <h1>أملِ ملاحظتك،<br>وراجع ما فهمه النظام قبل الحفظ.</h1>
     <p>يستمع إلى كلام الكادر التمريضي بالعربية الممزوجة بالمصطلحات الإنجليزية، ويحوّله إلى أدوية وتشخيصات وعلامات حيوية مطابقة لقاعدة معرفة طبية، ولا يحفظ شيئاً قبل تأكيدك.</p>
+    <p class="login-demo">مثال توضيحي ثابت، وليس نتيجة تحليل حقيقي: «أعطيت <mark class="drug">باراسيتامول</mark> 1 جرام وريدي كل 8 ساعات، والحرارة <mark class="vital">38.5</mark>». التظليل يبيّن ما يتعرف عليه النظام ليراجعه الممرض.</p>
   </div>
   <form class="card login-form" method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

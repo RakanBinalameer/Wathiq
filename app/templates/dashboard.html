@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}ملاحظة جديدة — صوت التمريض{% endblock %}
 {% block content %}
+<ol id="flow" class="flow" aria-label="مراحل العمل">
+  <li class="on" aria-current="step"><span class="n"><span>1</span></span>أملِ أو اكتب</li>
+  <li><span class="n"><span>2</span></span>راجع وأكّد</li>
+  <li><span class="n"><span>3</span></span>احفظ</li>
+</ol>
 <div class="workspace">
   <section class="pane dictate" aria-labelledby="h-dictate">
     <h1 id="h-dictate">ملاحظة جديدة</h1>
@@ -17,18 +22,22 @@
       </div>
     </div>
 
-    <label for="transcript">نص الملاحظة</label>
-    <textarea id="transcript" rows="7" maxlength="5000" placeholder="اضغط الميكروفون وتكلّم، أو اكتب هنا."></textarea>
-
-    <div class="actions">
-      <button id="mic" class="mic" type="button" aria-pressed="false">
+    <div class="voice">
+      <button id="mic" class="mic" type="button" aria-pressed="false" aria-labelledby="mic-label">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 0 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V20H9.5a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H13v-2.59A6 6 0 0 0 18 11.5Z"/></svg>
-        <span id="mic-label">ابدأ الإملاء</span>
+        <span class="bars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></span>
       </button>
+      <span id="mic-label" class="mic-label">ابدأ الإملاء</span>
       <select id="lang" aria-label="لغة الإملاء">
         <option value="ar-SA">إملاء بالعربية</option>
         <option value="en-US">Dictation in English</option>
       </select>
+    </div>
+
+    <label for="transcript">نص الملاحظة</label>
+    <textarea id="transcript" rows="7" maxlength="5000" placeholder="اضغط الميكروفون وتكلّم، أو اكتب هنا."></textarea>
+
+    <div class="actions">
       <button id="analyze" class="btn primary" type="button">حلّل الملاحظة</button>
       <button id="clear" class="btn" type="button">مسح</button>
     </div>
@@ -52,15 +61,18 @@
     </div>
     <div id="result" hidden>
       <p id="stale" class="alert warn" role="status" hidden>تغيّر النص بعد التحليل. أعد التحليل قبل الحفظ.</p>
+      <div id="summary" class="summary"></div>
       <p id="annotated" class="annotated" aria-label="النص مع المصطلحات المتعرَّف عليها"></p>
       <ul class="legend" aria-label="دليل الألوان">
         <li><i class="dot drug"></i>دواء</li><li><i class="dot dx"></i>تشخيص</li><li><i class="dot vital"></i>علامة حيوية</li>
       </ul>
       <div id="entities"></div>
       <div id="alerts" class="alert danger" role="alert" hidden></div>
-      <label class="ack" id="ack-wrap" hidden><input type="checkbox" id="ack"> راجعتُ التنبيهات الخطرة أعلاه وأتحمّل مسؤولية الحفظ.</label>
-      <button id="save" class="btn primary wide" type="button" disabled>حفظ الملاحظة المؤكَّدة</button>
-      <p id="save-hint" class="hint"></p>
+      <div class="savebar">
+        <label class="ack" id="ack-wrap" hidden><input type="checkbox" id="ack"> راجعتُ التنبيهات الخطرة أعلاه وأتحمّل مسؤولية الحفظ.</label>
+        <button id="save" class="btn primary wide" type="button" disabled>حفظ الملاحظة المؤكَّدة</button>
+        <p id="save-hint" class="hint"></p>
+      </div>
     </div>
   </section>
 </div>
@@ -94,4 +106,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=1" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=2" defer></script>{% endblock %}
