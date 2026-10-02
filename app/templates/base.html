@@ -6,20 +6,20 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="theme-color" content="#0e5a5f">
   <meta name="color-scheme" content="light dark">
-  <title>{% block title %}صوت التمريض{% endblock %}</title>
+  <title>{% block title %}وثّق{% endblock %}</title>
   <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
 </head>
 <body>
   <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
   <header class="top">
-    <a class="brand" href="{{ url_for('main.index') }}" aria-label="صوت التمريض — الصفحة الرئيسية">
+    <a class="brand" href="{{ url_for('main.index') }}" aria-label="وثّق — الصفحة الرئيسية">
       <svg class="wave" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
         <rect x="1" y="7" width="3" height="6" rx="1.5"/><rect x="6" y="3" width="3" height="14" rx="1.5"/>
         <rect x="11" y="0" width="3" height="20" rx="1.5"/><rect x="16" y="4" width="3" height="12" rx="1.5"/>
         <rect x="21" y="8" width="3" height="5" rx="1.5"/>
       </svg>
-      <span>صوت التمريض</span>
+      <span>وثّق</span>
     </a>
     <nav aria-label="التنقل الرئيسي">
       {% if current_user.is_authenticated %}

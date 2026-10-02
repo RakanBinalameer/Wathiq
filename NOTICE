@@ -1,4 +1,4 @@
-NurseVoice includes data derived from third-party sources:
+Wathiq includes data derived from third-party sources:
 
 * Synthea(TM) - https://github.com/synthetichealth/synthea - Apache License 2.0.
   data/synthea_codes.json lists RxNorm medication codes and SNOMED-CT condition codes
