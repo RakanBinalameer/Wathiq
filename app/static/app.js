@@ -8,7 +8,7 @@
   const FREQS = ["QD", "BID", "TID", "QID", "QHS", "STAT", "q4h", "q6h", "q8h", "q12h"];
   const UNITS = ["mg", "mcg", "g", "ml", "unit", "meq", "tab", "cap", "amp"];
 
-  const S = { items: [], analyzedText: "", serverStt: false, rec: null, recording: false, chunks: [], needAck: false };
+  const S = { items: [], hints: [], analyzedText: "", serverStt: false, rec: null, recording: false, chunks: [], needAck: false };
 
   // ---- tiny DOM helper (never innerHTML: all text goes through textContent) -------------------
   function h(tag, props, ...kids) {
@@ -53,6 +53,7 @@
     if (!r.ok) { setStatus(r.data.error || "تعذّر التحليل، حاول مرة أخرى.", true); return; }
     const res = r.data;
     S.analyzedText = $("transcript").value;
+    S.hints = res.hints || [];
     S.needAck = false;
     S.items = res.entities.map((e) => ({
       id: e.id, type: e.type, text: e.text, start: e.start, end: e.end, status: e.status, score: e.score,
@@ -73,8 +74,31 @@
   // ---- rendering ----------------------------------------------------------------------------
   function render(text) {
     renderAnnotated(text || S.analyzedText);
+    renderHints();
     renderEntities();
     updateSave();
+  }
+
+  // English words that dictation wrote in Arabic letters. Suggestions only: nothing changes until the nurse clicks.
+  function renderHints() {
+    const box = $("hints");
+    box.replaceChildren();
+    box.hidden = !S.hints.length;
+    if (!S.hints.length) return;
+    box.append(h("h3", {}, "كلمات إنجليزية مكتوبة بحروف عربية (اقتراح فقط)"));
+    const ul = h("ul");
+    for (const hint of S.hints) {
+      ul.append(h("li", {}, h("span", { dir: "auto" }, `«${hint.text}»`), "←", h("span", { class: "to" }, hint.suggest),
+        h("button", { class: "btn small", type: "button", onclick: () => applyHint(hint) }, "استبدال")));
+    }
+    box.append(ul);
+  }
+
+  function applyHint(hint) {
+    const ta = $("transcript");
+    if (ta.value !== S.analyzedText) { setStatus("تغيّر النص بعد التحليل. أعد التحليل أولاً ثم استبدل.", true); return; }
+    ta.value = ta.value.slice(0, hint.start) + hint.suggest + ta.value.slice(hint.end);
+    analyze();
   }
 
   // flow stepper: 1 = dictate/write, 2 = review and confirm, 3 = ready to save
@@ -130,7 +154,10 @@
     if (pos < text.length) box.append(text.slice(pos));
   }
 
-  function currentWarnings(it) { return it.removed ? [] : it.warnings; }
+  // the "no dose extracted" warning goes away once the nurse has typed a dose herself
+  function currentWarnings(it) {
+    return it.removed ? [] : it.warnings.filter((w) => !(w.code === "no_dose" && it.dose));
+  }
 
   function focusRow(id) {
     const row = document.querySelector(`.ent[data-id="${id}"]`);
@@ -360,7 +387,7 @@
   // ---- wiring -------------------------------------------------------------------------------
   function clearAll() {
     $("transcript").value = ""; $("allergies").value = ""; $("patient-ref").value = "";
-    S.items = []; S.analyzedText = ""; S.needAck = false;
+    S.items = []; S.hints = []; S.analyzedText = ""; S.needAck = false;
     $("result").hidden = true; $("empty").hidden = false; setStatus("");
     setStep(1);
   }

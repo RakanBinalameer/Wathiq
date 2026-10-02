@@ -66,6 +66,7 @@
       <ul class="legend" aria-label="دليل الألوان">
         <li><i class="dot drug"></i>دواء</li><li><i class="dot dx"></i>تشخيص</li><li><i class="dot vital"></i>علامة حيوية</li>
       </ul>
+      <div id="hints" class="hints" hidden></div>
       <div id="entities"></div>
       <div id="alerts" class="alert danger" role="alert" hidden></div>
       <div class="savebar">
@@ -106,4 +107,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=2" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}?v=3" defer></script>{% endblock %}

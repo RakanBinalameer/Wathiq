@@ -9,6 +9,7 @@ Design choices (important for a clinical setting):
 """
 import re
 
+from .mixed import find_translit
 from .textnorm import TOKEN_RE, is_arabic, normalize, norm_phrase, strip_marks, tokenize
 
 MAX_NGRAM = 4
@@ -26,11 +27,43 @@ mg mcg ml gm gram grams unit units iv im po sc sl prn stat bid tid qid daily
 # ---- attribute patterns (applied on normalised text) ----------------------------------------
 _NUMWORDS = {"نصف": 0.5, "نص": 0.5, "ربع": 0.25, "واحد": 1, "اثنين": 2, "اثنان": 2, "ثلاث": 3, "ثلاثه": 3,
              "اربع": 4, "اربعه": 4, "خمس": 5, "خمسه": 5, "عشر": 10, "عشره": 10}
+# Spoken English numbers ("five hundred", "six", "half a"): matched inside the patterns below instead
+# of rewriting the text, because every entity offset must keep pointing into the nurse's original text.
+_EN_ONES = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9}
+_EN_TEENS = {"ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+             "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
+_EN_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+_EN_ONES_RE = "|".join(_EN_ONES)
+_EN_BELOW100 = (r"(?:(?:" + "|".join(_EN_TENS) + r")(?:[\s-](?:" + _EN_ONES_RE + r"))?|"
+                + "|".join(_EN_TEENS) + "|" + _EN_ONES_RE + ")")
+_EN_NUM = (r"(?<![a-z])(?:(?:" + _EN_ONES_RE + r")\s+hundred(?:\s+(?:and\s+)?" + _EN_BELOW100 + r")?|"
+           + _EN_BELOW100 + r"(?:\s+thousand)?|half(?:\s+an?)?)(?![a-z])")
+
+
+def en_number(s):
+    """'five hundred' -> 500, 'twenty-five' -> 25, 'half a' -> 0.5 (words from the patterns above only)."""
+    total = cur = 0
+    for w in re.split(r"[\s-]+", s.strip()):
+        if w == "half":
+            return 0.5
+        if w in _EN_ONES:
+            cur += _EN_ONES[w]
+        elif w in _EN_TEENS:
+            cur += _EN_TEENS[w]
+        elif w in _EN_TENS:
+            cur += _EN_TENS[w]
+        elif w == "hundred":
+            cur = max(cur, 1) * 100
+        elif w == "thousand":
+            total, cur = total + max(cur, 1) * 1000, 0
+    return total + cur
+
+
 _UNIT_CANON = [
-    (r"mcg|ug|مكجم|ميكروجرام|ميكروغرام", "mcg"),
-    (r"mg|ملغ\w*|ملجم|مجم|ملي\s*جرام|ملي\s*غرام", "mg"),
+    (r"mcg|ug|micrograms?|مكجم|ميكروجرام|ميكروغرام", "mcg"),
+    (r"mg|milligrams?|ملغ\w*|ملجم|مجم|ملي\s*جرام|ملي\s*غرام", "mg"),
     (r"gm|gr|grams?|g|جرام|غرام|جم", "g"),
-    (r"ml|مل|ملي", "ml"),
+    (r"ml|milliliters?|millilitres?|cc|مل|ملي", "ml"),
     (r"iu|units?|وحد[هات]+", "unit"),
     (r"meq", "meq"),
     (r"tabs?|tablets?|حبه|حبات|حبوب|حبتين", "tab"),
@@ -38,7 +71,7 @@ _UNIT_CANON = [
     (r"amps?|ampoules?|امبول\w*", "amp"),
 ]
 _UNIT_RE = "|".join(f"(?P<u{i}>{p})" for i, (p, _c) in enumerate(_UNIT_CANON))
-_NUM = r"(?P<num>\d+(?:\.\d+)?|" + "|".join(sorted(_NUMWORDS, key=len, reverse=True)) + r")"
+_NUM = r"(?P<num>\d+(?:\.\d+)?|" + _EN_NUM + "|" + "|".join(sorted(_NUMWORDS, key=len, reverse=True)) + r")"
 DOSE_RE = re.compile(_NUM + r"\s*(?:" + _UNIT_RE + r")(?![a-z؀-ۿ])")
 _TO_MG = {"mg": 1.0, "g": 1000.0, "mcg": 0.001}
 
@@ -53,7 +86,7 @@ ROUTES = [
     ("PO", r"\bpo\b|p\.o|\boral(?:ly)?\b|by mouth|فموي|بالفم|عن طريق الفم"),
 ]
 FREQS = [
-    ("q{n}h", r"\bq\s*(\d{1,2})\s*h\b|every\s+(\d{1,2})\s*h(?:ours?)?|كل\s+(\d{1,2})\s*ساع\w*"),
+    ("q{n}h", r"\bq\s*(\d{1,2})\s*h\b|every\s+(\d{1,2}|" + _EN_BELOW100 + r")\s*(?:hours?|hrs?|h)\b|كل\s+(\d{1,2})\s*ساع\w*"),
     ("q1h", r"كل\s+ساعه"),
     ("BID", r"\bbid\b|b\.i\.d|twice\s+(?:a\s+)?(?:day|daily)|مرتين"),
     ("TID", r"\btid\b|t\.i\.d|three\s+times|ثلاث\s+مرات|3\s+مرات"),
@@ -73,7 +106,8 @@ _FILL = r"(?:\s+(?:المريض|المريضه|عنده|عندها|تبلغ|يب
 _SEP = _FILL + r"\s*(?:is|هو|:|=|-)?\s*"
 VITALS = [
     ("bp", "ضغط الدم", "mmHg",
-     re.compile(r"(?:\bbp\b|blood\s+pressure|ضغط" + _PRON + r"(?:\s+الدم)?)" + _SEP + r"(\d{2,3})\s*/\s*(\d{2,3})(?:\s*mmhg)?")),
+     # "160/100", spoken English "160 over 100", spoken Gulf Arabic "150 على 95" (normalised: ى -> ي)
+     re.compile(r"(?:\bbp\b|blood\s+pressure|ضغط" + _PRON + r"(?:\s+الدم)?)" + _SEP + r"(\d{2,3})\s*(?:/|over|علي)\s*(\d{2,3})(?:\s*mmhg)?")),
     ("hr", "النبض", "bpm",
      re.compile(r"(?:\bhr\b|heart\s+rate|pulse|نبض" + _PRON + r"|معدل\s+النبض|ضربات\s+القلب)" + _SEP + r"(\d{2,3})(?![\d/])")),
     ("rr", "معدل التنفس", "/min",
@@ -120,7 +154,12 @@ def parse_dose(seg: str):
     if not m:
         return None
     raw = m.group("num")
-    num = float(raw) if raw[0].isdigit() else float(_NUMWORDS[raw])
+    if raw[0].isdigit():
+        num = float(raw)
+    elif raw in _NUMWORDS:
+        num = float(_NUMWORDS[raw])
+    else:
+        num = float(en_number(raw))
     unit = _canon_unit(m)
     if m.group(0).strip().endswith("حبتين"):
         num, unit = 2.0, "tab"
@@ -140,7 +179,7 @@ def parse_freq(seg):
         if m:
             if code == "q{n}h":
                 n = next(g for g in m.groups() if g)
-                return f"q{int(n)}h"
+                return f"q{int(n) if n.isdigit() else en_number(n)}h"
             return code
 
 
@@ -149,9 +188,25 @@ def _is_short_latin_ok(orig):  # 'HTN', 'NS' accepted only when typed in capital
     return orig.isupper()
 
 
+# The alias 'فاليوم' (Valium) loses its 'فال' prefix when normalised and becomes 'يوم', which is also what
+# 'اليوم' (today) normalises to. Without this guard every note containing 'اليوم' matched diazepam.
+# Only the real spelling (optionally with a leading 'و') may hit these stems.
+_STEM_GUARD = {"يوم": "فاليوم"}
+
+
+def _passes_stem_guard(phrase, orig):
+    required = _STEM_GUARD.get(phrase)
+    if required is None:
+        return True
+    r = normalize(orig)
+    return (r[1:] if r.startswith("و") else r) == required
+
+
 def _exact(kb, kind, phrase, orig, n):
     ids = kb.exact(kind, phrase)
     if not ids:
+        return None
+    if n == 1 and not _passes_stem_guard(phrase, orig):
         return None
     if len(phrase) <= 3 and not is_arabic(phrase) and n == 1 and not _is_short_latin_ok(orig):
         return None
@@ -334,7 +389,8 @@ def analyze(kb, text, allergies=""):
                "vitals": sum(e["type"] == "vital" for e in entities),
                "review": sum(e["status"] in ("review", "check") for e in entities),
                "danger": sum(w["level"] == "danger" for e in entities for w in e["warnings"])}
-    return {"text": text, "entities": entities, "summary": summary}
+    hints = find_translit(text, [(e["start"], e["end"]) for e in entities])
+    return {"text": text, "entities": entities, "summary": summary, "hints": hints}
 
 
 def _drug_attrs(kb, ent, text, nt, h, hits, idx, hit_starts, allergy_ids, allergy_classes):
@@ -359,6 +415,11 @@ def _drug_attrs(kb, ent, text, nt, h, hits, idx, hit_starts, allergy_ids, allerg
         route = route or parse_route(pre)
         freq = freq or parse_freq(pre)
     ent["attrs"] = {"dose": dose, "route": route, "freq": freq, "prn": bool(PRN_RE.search(seg))}
+    if not dose:
+        # a drug without a dose must never be auto-confirmed: the nurse either types it or confirms it was not stated
+        ent["status"] = "review"
+        ent["warnings"].append({"level": "warn", "code": "no_dose",
+                                "msg": "لم تُستخرج جرعة لهذا الدواء — أدخلها أو أكّد أنها غير مذكورة"})
     if ent["match"]["ambiguous"]:
         ent["status"] = "review"
         ent["warnings"].append({"level": "warn", "msg": "نوع الأنسولين غير محدد — حدّده (لانتوس/عادي/…)"})
