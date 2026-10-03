@@ -266,7 +266,7 @@ def api_save_note():
         if not isinstance(raw_sbar, dict):
             return jsonify(error="بيانات SBAR غير صالحة", sbar=True), 400
         sbar_body, err = _validate_sbar(raw_sbar.get("sections"), raw_sbar.get("vitals", []),
-                                        raw_sbar.get("confirmed"), raw_sbar.get("no_names"))
+                                        raw_sbar.get("confirmed"))
         if err:
             return jsonify(error=err[0], sbar=True), err[1]
     db = get_db()
@@ -344,7 +344,7 @@ def _clean_sbar_items(raw):
     return out
 
 
-def _validate_sbar(sec, vit, confirmed, no_names):
+def _validate_sbar(sec, vit, confirmed):
     """Shared by /api/sbar and /api/notes. -> (body, None) or (None, (message, http_status))."""
     if not isinstance(sec, dict) or not isinstance(vit, list) or len(vit) > 20:
         return None, ("بيانات غير صالحة", 400)
@@ -358,8 +358,6 @@ def _validate_sbar(sec, vit, confirmed, no_names):
         return None, ("التقرير فارغ", 400)
     if confirmed is not True:
         return None, ("أكّد مراجعتك للأقسام الأربعة أولاً", 409)
-    if no_names is not True:
-        return None, ("أكّد أن نص التقييم والتوصيات لا يحتوي اسم المريض", 409)
     vitals = []
     for e in vit:
         if not isinstance(e, dict) or e.get("type", "vital") != "vital":
@@ -386,7 +384,7 @@ def api_sbar_save():
         return jsonify(error="النص مطلوب"), 400
     if not PATIENT_REF_RE.match(patient_ref):
         return jsonify(error="رقم الملف يقبل أحرفاً وأرقاماً فقط (بدون اسم المريض)"), 400
-    body, err = _validate_sbar(data.get("sections"), data.get("vitals", []), data.get("confirmed"), data.get("no_names"))
+    body, err = _validate_sbar(data.get("sections"), data.get("vitals", []), data.get("confirmed"))
     if err:
         return jsonify(error=err[0]), err[1]
     db = get_db()

@@ -7,7 +7,7 @@ import pytest
 TEXT = "أعطيت باراسيتامول 1 جرام وريدي. الحالة حرجة، SpO2 88%. أوصي بمتابعة دقيقة."
 SBAR = {"sections": {"S": ["ضيق تنفس"], "B": [], "A": ["الحالة حرجة"], "R": ["متابعة دقيقة"]},
         "vitals": [{"type": "vital", "text": "SpO2 88%", "kind": "spo2", "label": "SpO2", "value": "88", "unit": "%"}],
-        "confirmed": True, "no_names": True}
+        "confirmed": True}
 
 
 def entities(c):
@@ -65,7 +65,7 @@ def test_sbar_banner_only_for_own_report_of_same_file(client, db_path):
 
 
 @pytest.mark.parametrize("kw,status", [
-    ({"confirmed": False}, 409), ({"no_names": False}, 409), ({"confirmed": "yes"}, 409),
+    ({"confirmed": False}, 409), ({"confirmed": "yes"}, 409),
     ({"sections": {"S": [], "B": [], "A": [], "R": []}}, 400), ({"sections": "x"}, 400),
     ({"vitals": [{"type": "drug", "match_id": 1}]}, 400),
     ({"vitals": [{"type": "vital", "kind": "spo2", "value": "abc", "label": "x", "unit": "%"}]}, 400),
@@ -86,6 +86,7 @@ def test_sbar_must_be_an_object(client, db_path):
 def test_dictation_page_has_the_sbar_section(client):
     html = client.get("/").text
     assert 'role="tab"' not in html                                          # one view: no tabs to switch between
-    for needle in ('id="tabp-sbar"', 'id="sb-cards"', 'id="sb-include"', 'id="sb-ok-review"', 'id="sb-ok-names"', "sbar_core.js"):
+    for needle in ('id="tabp-sbar"', 'id="sb-cards"', 'id="sb-include"', 'id="sb-ok-review"', "sbar_core.js"):
         assert needle in html
+    assert 'sb-ok-names' not in html                                          # no patient-name checkbox any more
     assert html.index("sbar_core.js") < html.index("app.js")                  # the panel must load before app.js uses it

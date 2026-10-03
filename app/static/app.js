@@ -76,7 +76,7 @@
 
   // a failure of the SBAR split never blocks the normal note: the tab just says so and the opt-in stays off
   function loadSbar(rs) {
-    for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).checked = false;
+    for (const id of ["sb-include", "sb-ok-review"]) $(id).checked = false;
     S.sbarOk = rs.ok;
     $("sb-include").disabled = !rs.ok;
     if (rs.ok) { $("sb-msg").hidden = true; sb.load(rs.data); }
@@ -308,7 +308,7 @@
     if (withSbar) {
       if (!sb.total()) sbWhy = "تقرير SBAR فارغ: أضف جملة في قسم SBAR أو ألغِ خيار حفظه.";
       else if (sb.pending()) sbWhy = `SBAR: ${sb.pending()} جملة تحتاج مراجعتك (قسم «تسليم SBAR»).`;
-      else if (!$("sb-ok-review").checked || !$("sb-ok-names").checked) sbWhy = "SBAR: أكّد المراجعة وخلوّ النص من اسم المريض.";
+      else if (!$("sb-ok-review").checked) sbWhy = "SBAR: أكّد مراجعة الأقسام الأربعة.";
     }
     $("save").disabled = stale || pending > 0 || noUnit || !refOk || !ackOk || !!sbWhy;
     $("save-hint").textContent = stale ? "أعد التحليل بعد تعديل النص." :
@@ -332,7 +332,7 @@
       entities, acknowledged: $("ack").checked,
     };
     if (S.sbarOk && $("sb-include").checked) {
-      payload.sbar = { sections: sb.sections(), vitals: sb.vitalsPayload(), confirmed: $("sb-ok-review").checked, no_names: $("sb-ok-names").checked };
+      payload.sbar = { sections: sb.sections(), vitals: sb.vitalsPayload(), confirmed: $("sb-ok-review").checked };
     }
     const r = await api("/api/notes", payload);
     if (r.status === 201) { setStatus(payload.sbar ? "تم حفظ الملاحظة وتقرير SBAR." : "تم حفظ الملاحظة."); location.href = r.data.url; return; }
@@ -421,7 +421,7 @@
     $("transcript").value = ""; $("allergies").value = ""; $("patient-ref").value = "";
     S.items = []; S.hints = []; S.analyzedText = ""; S.needAck = false;
     sb.clear(); S.sbarOk = false;
-    for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).checked = false;
+    for (const id of ["sb-include", "sb-ok-review"]) $(id).checked = false;
     $("sb-include").disabled = true; $("sb-msg").hidden = true;
     $("result").hidden = true; $("empty").hidden = false; setStatus("");
     setStep(1);
@@ -433,7 +433,7 @@
     $("clear").addEventListener("click", clearAll);
     $("save").addEventListener("click", save);
     $("ack").addEventListener("change", updateSave);
-    for (const id of ["sb-include", "sb-ok-review", "sb-ok-names"]) $(id).addEventListener("change", updateSave);
+    for (const id of ["sb-include", "sb-ok-review"]) $(id).addEventListener("change", updateSave);
     $("patient-ref").addEventListener("input", () => { if (!$("result").hidden) updateSave(); });
     $("transcript").addEventListener("input", () => { if (!$("result").hidden) updateSave(); });
     document.querySelectorAll("[data-sample]").forEach((b) => b.addEventListener("click", () => {

@@ -62,7 +62,7 @@ def analyze(c, text=MOCK):
 
 
 def body(**kw):
-    b = {"patient_ref": "100234", "transcript": MOCK, "confirmed": True, "no_names": True,
+    b = {"patient_ref": "100234", "transcript": MOCK, "confirmed": True,
          "sections": {"S": ["المريضة تعاني من ضيق تنفس حاد"], "B": ["تاريخ مرضي بـ COPD"],
                       "A": ["الحالة حرجة", "تم إعطاء أكسجين عبر القناع"], "R": ["متابعة دقيقة لـ SpO2", "استدعاء الطبيب المناوب"]},
          "vitals": [{"type": "vital", "text": "SpO2 88%", "kind": "spo2", "label": "SpO2", "value": "88", "unit": "%"}]}
@@ -96,10 +96,12 @@ def test_analyze_rejects_bad_input(client, bad):
     assert client.post("/api/sbar/analyze", json=bad, headers={"X-CSRFToken": client.csrf}).status_code == 400
 
 
-def test_save_requires_both_confirmations(client):
+def test_save_requires_the_review_confirmation(client):
     assert post(client, confirmed=False).status_code == 409
-    assert post(client, no_names=False).status_code == 409
     assert post(client, confirmed="yes").status_code == 409
+    assert "no_names" not in body()                                          # the patient-name confirmation no longer exists
+    assert post(client).status_code == 201                                   # saving needs only the review confirmation
+    assert post(client, no_names=False).status_code == 201                   # a stale client still sending the old field is not refused
 
 
 @pytest.mark.parametrize("kw", [
