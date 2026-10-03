@@ -113,7 +113,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand)}
 .mic .bars b:nth-child(4){animation-delay:.45s}
 .mic .bars b:nth-child(5){animation-delay:.6s}
 .mic-label{font-weight:600}
-.voice select{width:auto}
 @keyframes pulse{50%{box-shadow:0 0 0 10px rgba(161,23,13,.2)}}
 @keyframes wave{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
 

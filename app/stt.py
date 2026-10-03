@@ -11,6 +11,11 @@ Environment:
   WHISPER_MODEL_DIR  explicit model folder (overrides models/whisper-<size>)
   WHISPER_THREADS    CPU threads (default 2)
 
+The language is detected automatically for every speech segment (a pause of half a second starts a new
+segment), so Arabic and English parts of one recording are each decoded in their own language. A segment
+detected as anything other than Arabic/English is decoded again as Arabic. Words mixed inside ONE sentence
+are not handled: Whisper picks one language per segment.
+
 Accuracy on real nurse speech has NOT been measured.
 """
 import io
@@ -23,11 +28,14 @@ from pathlib import Path
 CHUNK_SECONDS = 25         # Whisper reads at most 30 s at a time; longer audio is cut at quiet points
 SILENT_RMS = 0.003         # chunks quieter than this are skipped (Whisper invents text on silence)
 MAX_SECONDS = 120          # longer recordings are refused (keeps one request from hogging the CPU)
-LANGUAGES = {"ar", "en"}
+LANGUAGES = {"ar", "en"}   # languages the app expects; anything else is re-decoded as FALLBACK_LANGUAGE
+FALLBACK_LANGUAGE = "ar"
+PAUSE_SECONDS = 0.5        # silence this long starts a new segment (language is detected per segment)
+MIN_SEGMENT_SECONDS = 2.0  # shorter pieces are merged into a neighbour: language ID is unreliable on <2 s
 
 _ROOT = Path(__file__).resolve().parent.parent
 _lock = threading.Lock()
-_recognizers = {}          # language -> OfflineRecognizer (loaded on first use)
+_recognizers = {}          # language ("" = auto-detect) -> OfflineRecognizer, loaded on first use
 _inference = threading.Lock()   # one decode at a time: the model is CPU-heavy
 
 
@@ -129,21 +137,61 @@ def clean(text: str) -> str:
     return _REPEAT.sub(r"\1", text).strip()
 
 
-def transcribe(data: bytes, language: str = "ar") -> str:
-    if language not in LANGUAGES:
-        language = "ar"
+def split_speech(x, rate=16000):
+    """Cut at pauses of PAUSE_SECONDS (keeping pieces >= MIN_SEGMENT_SECONDS), then at CHUNK_SECONDS at most."""
+    import numpy as np
+    frame = rate * 30 // 1000
+    n = len(x) // frame
+    if n == 0:
+        return [x]
+    e = np.sqrt((x[: n * frame].reshape(n, frame) ** 2).mean(axis=1))
+    quiet = e < max(SILENT_RMS, 0.08 * float(np.percentile(e, 95)))
+    need, cuts, run = int(PAUSE_SECONDS * 1000 / 30), [], 0
+    for i, q in enumerate(list(quiet) + [False]):
+        if q:
+            run += 1
+        else:
+            if run >= need and i - run > 0 and i < n:        # a pause strictly inside the recording
+                cuts.append((i - run // 2) * frame)
+            run = 0
+    pieces, start = [], 0
+    for c in cuts + [len(x)]:
+        if pieces and c - start < MIN_SEGMENT_SECONDS * rate:    # too short: merge with the previous piece
+            pieces[-1] = (pieces[-1][0], c)
+        else:
+            pieces.append((start, c))
+        start = c
+    if len(pieces) > 1 and pieces[0][1] - pieces[0][0] < MIN_SEGMENT_SECONDS * rate:   # short first piece
+        pieces[1] = (pieces[0][0], pieces[1][1]); pieces.pop(0)
+    out = []
+    for a, b in pieces:
+        out.extend(split_chunks(x[a:b], rate))
+    return out
+
+
+def _decode(rec, chunk):
+    stream = rec.create_stream()
+    stream.accept_waveform(16000, chunk)
+    rec.decode_stream(stream)
+    return clean(stream.result.text), (stream.result.lang or "").strip()
+
+
+def transcribe(data: bytes) -> dict:
+    """Return {"text": str, "languages": [codes in order of appearance]}. Language is auto-detected."""
     if not available():
         raise SttUnavailable("stt unavailable")
     import numpy as np
     samples = read_wav(data)
-    parts = []
-    for chunk in split_chunks(samples):
+    parts, langs = [], []
+    for chunk in split_speech(samples):
         if len(chunk) < 1600 or float(np.sqrt(np.mean(chunk ** 2))) < SILENT_RMS:
             continue
-        rec = _recognizer(language)
         with _inference:
-            stream = rec.create_stream()
-            stream.accept_waveform(16000, chunk)
-            rec.decode_stream(stream)
-            parts.append(clean(stream.result.text))
-    return " ".join(p for p in parts if p).strip()
+            text, lang = _decode(_recognizer(""), chunk)
+            if lang not in LANGUAGES:                    # e.g. dialect mis-detected as Persian/Urdu
+                text, lang = _decode(_recognizer(FALLBACK_LANGUAGE), chunk)[0], FALLBACK_LANGUAGE
+        if text:
+            parts.append(text)
+            if lang not in langs:
+                langs.append(lang)
+    return {"text": " ".join(parts).strip(), "languages": langs}

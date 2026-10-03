@@ -451,10 +451,10 @@ def api_stt():
     if not stt.available():
         return jsonify(error="نموذج Whisper غير مثبّت على الخادم."), 501
     try:
-        text = stt.transcribe(f.read(), request.form.get("lang", "ar"))
+        result = stt.transcribe(f.read())
     except stt.BadAudio:
         return jsonify(error="تعذّرت قراءة التسجيل. أعد المحاولة."), 400
     except stt.SttUnavailable:
         return jsonify(error="نموذج Whisper غير مثبّت على الخادم."), 501
-    audit("stt", f"chars={len(text)}", current_user.id)
-    return jsonify(text=text)
+    audit("stt", f"chars={len(result['text'])} lang={'+'.join(result['languages']) or '-'}", current_user.id)
+    return jsonify(text=result["text"], languages=result["languages"])

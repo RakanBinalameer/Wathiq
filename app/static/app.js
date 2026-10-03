@@ -406,7 +406,7 @@
       setStatus("جارٍ التفريغ بنموذج Whisper… قد يستغرق بضع ثوانٍ.");
       try {
         const wav = await toWav16k(new Blob(S.chunks, { type: mr.mimeType || "audio/webm" }));
-        const fd = new FormData(); fd.append("audio", wav, "note.wav"); fd.append("lang", $("lang").value);
+        const fd = new FormData(); fd.append("audio", wav, "note.wav");
         const r = await api("/api/stt", fd, true);
         if (!r.ok) { setStatus(r.data.error || "تعذّر تفريغ الصوت.", true); return; }
         if (!(r.data.text || "").trim()) { setStatus("لم يُسمع كلام في التسجيل. أعد المحاولة وتكلّم قرب الميكروفون.", true); return; }

@@ -198,36 +198,61 @@ def test_stt_gracefully_unavailable(client, monkeypatch, tmp_path):
 
 
 def test_stt_with_fake_model(client, monkeypatch):
+    """Language is never sent by the browser: each segment is detected; unexpected languages re-decoded as Arabic."""
     from app import stt
-    seen = []
+    calls = []
 
     class FakeStream:
-        def __init__(self): self.result = type("R", (), {"text": ""})()
+        def __init__(self): self.result = type("R", (), {"text": "", "lang": ""})()
         def accept_waveform(self, rate, x): self.n = len(x); self.rate = rate
 
-    class FakeRec:
-        def create_stream(self): return FakeStream()
-        def decode_stream(self, st): st.result.text = " اعطيت باراسيتامول "; seen.append((st.rate, st.n))
+    def fake(lang, detected, text):
+        class Rec:
+            def create_stream(self): return FakeStream()
+            def decode_stream(self, st):
+                st.result.text, st.result.lang = text, detected
+                calls.append((lang, st.rate, st.n))
+        return Rec()
 
+    state = {"detected": "ar"}
+    recs = {"": lambda: fake("", state["detected"], " اعطيت باراسيتامول "), "ar": lambda: fake("ar", "ar", "اعطيت باراسيتامول")}
     monkeypatch.setattr(stt, "available", lambda: True)
-    monkeypatch.setattr(stt, "_recognizer", lambda lang: FakeRec())
+    monkeypatch.setattr(stt, "_recognizer", lambda lang: recs[lang]())
     hdr = {"X-CSRFToken": client.csrf}
-    # 48 kHz stereo is converted to 16 kHz mono
-    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, 48000, channels=2)), "a.wav", "audio/wav"), "lang": "ar"}, headers=hdr)
-    assert r.status_code == 200 and r.get_json()["text"] == "اعطيت باراسيتامول"
-    assert seen[-1][0] == 16000 and abs(seen[-1][1] - 32000) <= 1
+    # 48 kHz stereo is converted to 16 kHz mono; no "lang" field is needed
+    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, 48000, channels=2)), "a.wav", "audio/wav")}, headers=hdr)
+    assert r.status_code == 200 and r.get_json() == {"text": "اعطيت باراسيتامول", "languages": ["ar"]}
+    assert calls[-1][0] == "" and calls[-1][1] == 16000 and abs(calls[-1][2] - 32000) <= 1
+    # a language we do not expect (dialect mis-detected as Persian) is decoded again as Arabic
+    state["detected"] = "fa"; n = len(calls)
+    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2)), "a.wav", "audio/wav")}, headers=hdr)
+    assert r.get_json()["languages"] == ["ar"] and [c[0] for c in calls[n:]] == ["", "ar"]
     # silence is never sent to the model (Whisper invents text on silence)
-    n = len(seen)
+    n = len(calls)
     r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, amp=0.0)), "a.wav", "audio/wav")}, headers=hdr)
-    assert r.get_json()["text"] == "" and len(seen) == n
+    assert r.get_json() == {"text": "", "languages": []} and len(calls) == n
     # not a wav -> 400, never a crash
     r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(b"not audio"), "a.wav", "audio/wav")}, headers=hdr)
     assert r.status_code == 400
-    # the call is audited by length only, never by content
+    # audited by length and language code only, never by content
     from app.db import connect
     con = connect(client.application.config["DATABASE"])
     rows = [r["detail"] for r in con.execute("SELECT detail FROM audit WHERE action='stt'")]
     assert rows and all(d.startswith("chars=") and "باراسيتامول" not in d for d in rows)
+
+
+def test_stt_splits_at_pauses_and_keeps_both_languages():
+    import numpy as np
+    from app import stt
+    rate = 16000
+    t = np.arange(rate * 3) / rate
+    voice = (0.3 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+    gap = np.zeros(int(rate * 0.8), dtype=np.float32)
+    parts = stt.split_speech(np.concatenate([voice, gap, voice]))
+    assert len(parts) == 2 and all(len(p) > 2.5 * rate for p in parts)         # cut inside the pause
+    assert len(stt.split_speech(np.concatenate([voice, np.zeros(int(rate * 0.2), dtype=np.float32), voice]))) == 1   # short pause: no cut
+    short = (0.3 * np.sin(2 * np.pi * 220 * t[: rate])).astype(np.float32)       # 1 s pieces are merged (language ID unreliable)
+    assert len(stt.split_speech(np.concatenate([short, gap, short]))) == 1
 
 
 def test_stt_chunking_and_cleaning():
