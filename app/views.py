@@ -438,7 +438,7 @@ def api_kb_search():
 @bp.get("/api/stt/status")
 @login_required
 def api_stt_status():
-    return jsonify(server=stt.available())
+    return jsonify(server=stt.available(), engine=stt.engine())
 
 
 @bp.post("/api/stt")
@@ -451,10 +451,12 @@ def api_stt():
     if not stt.available():
         return jsonify(error="نموذج Whisper غير مثبّت على الخادم."), 501
     try:
-        result = stt.transcribe(f.read())
+        result = stt.transcribe(f.read(), kb())
     except stt.BadAudio:
         return jsonify(error="تعذّرت قراءة التسجيل. أعد المحاولة."), 400
     except stt.SttUnavailable:
         return jsonify(error="نموذج Whisper غير مثبّت على الخادم."), 501
-    audit("stt", f"chars={len(result['text'])} lang={'+'.join(result['languages']) or '-'}", current_user.id)
-    return jsonify(text=result["text"], languages=result["languages"])
+    except stt.RemoteError:
+        return jsonify(error="تعذّر الاتصال بخدمة التفريغ السحابية، ولا يوجد نموذج محلي احتياطي."), 502
+    audit("stt", f"chars={len(result['text'])} lang={'+'.join(result['languages']) or '-'} engine={result['engine']}", current_user.id)
+    return jsonify(text=result["text"], languages=result["languages"], engine=result["engine"])

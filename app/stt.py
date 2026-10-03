@@ -16,12 +16,23 @@ segment), so Arabic and English parts of one recording are each decoded in their
 detected as anything other than Arabic/English is decoded again as Arabic. Words mixed inside ONE sentence
 are not handled: Whisper picks one language per segment.
 
+Optional cloud engine (OpenAI `gpt-transcribe`), used when OPENAI_API_KEY is set (STT_ENGINE=local turns it off):
+  OPENAI_API_KEY     the key. NEVER put it in code or in git; read it from the environment or a private file.
+  OPENAI_STT_MODEL   default gpt-transcribe
+It receives the whole recording with languages=ar,en and drug names as keywords, so Arabic and English inside
+one recording are handled by the model itself. The audio LEAVES this server (demo/fake data only). If the call
+fails, the local model is used when it is installed. Not yet tested against the real API.
+
 Accuracy on real nurse speech has NOT been measured.
 """
 import io
+import json
 import os
 import re
 import threading
+import urllib.error
+import urllib.request
+import uuid
 import wave
 from pathlib import Path
 
@@ -47,6 +58,10 @@ class BadAudio(ValueError):
     pass
 
 
+class RemoteError(RuntimeError):
+    """The cloud engine failed and there is no local model to fall back on."""
+
+
 def size() -> str:
     s = (os.environ.get("WHISPER_SIZE") or "small").strip().lower()
     return s if s in ("tiny", "base", "small") else "small"
@@ -63,7 +78,7 @@ def _files():
     return (enc, dec, tok) if all(p.is_file() for p in (enc, dec, tok)) else None
 
 
-def available() -> bool:
+def local_available() -> bool:
     """True when sherpa-onnx is installed and the model files are present."""
     if _files() is None:
         return False
@@ -176,12 +191,8 @@ def _decode(rec, chunk):
     return clean(stream.result.text), (stream.result.lang or "").strip()
 
 
-def transcribe(data: bytes) -> dict:
-    """Return {"text": str, "languages": [codes in order of appearance]}. Language is auto-detected."""
-    if not available():
-        raise SttUnavailable("stt unavailable")
+def _transcribe_local(samples) -> dict:
     import numpy as np
-    samples = read_wav(data)
     parts, langs = [], []
     for chunk in split_speech(samples):
         if len(chunk) < 1600 or float(np.sqrt(np.mean(chunk ** 2))) < SILENT_RMS:
@@ -195,3 +206,84 @@ def transcribe(data: bytes) -> dict:
             if lang not in langs:
                 langs.append(lang)
     return {"text": " ".join(parts).strip(), "languages": langs}
+
+
+# ---- optional cloud engine ------------------------------------------------------------------------
+OPENAI_URL = "https://api.openai.com/v1/audio/transcriptions"
+OPENAI_TIMEOUT = 60
+KEYWORD_LIMIT = 40
+
+
+def remote_configured() -> bool:
+    return bool(os.environ.get("OPENAI_API_KEY")) and os.environ.get("STT_ENGINE", "auto") != "local"
+
+
+def available() -> bool:
+    return remote_configured() or local_available()
+
+
+def engine() -> str:
+    """Which engine the next request tries first: "openai", "local" or "" (none)."""
+    if remote_configured():
+        return "openai"
+    return "local" if local_available() else ""
+
+
+def keywords(kb):
+    """Drug names (English generic names from the curated list) so they are spelled as in the knowledge base."""
+    if kb is None:
+        return []
+    names = [d["generic_en"] for d in kb.drugs.values() if d["source"] == "curated_sample" and d.get("generic_en")]
+    return [n for n in names if not re.search(r"[<>\r\n]", n)][:KEYWORD_LIMIT]
+
+
+def _multipart(fields, file_name, file_bytes, file_type="audio/wav"):
+    """Build a multipart/form-data body (no third-party library). fields: list of (name, value)."""
+    boundary = uuid.uuid4().hex
+    out = []
+    for name, value in fields:
+        out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode("utf-8"))
+    out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{file_name}"\r\n'
+               f"Content-Type: {file_type}\r\n\r\n".encode("utf-8"))
+    out.append(file_bytes)
+    out.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(out), f"multipart/form-data; boundary={boundary}"
+
+
+def _openai_post(data: bytes, kws) -> dict:
+    """Send the recording to OpenAI; returns the parsed JSON. Raises RemoteError (the key is never logged)."""
+    fields = [("model", os.environ.get("OPENAI_STT_MODEL") or "gpt-transcribe"),
+              ("prompt", "ملاحظة تمريضية بالعربية الخليجية والإنجليزية، وأسماء الأدوية بالإنجليزية."),
+              ("languages[]", "ar"), ("languages[]", "en")]
+    fields += [("keywords[]", k) for k in kws]
+    body, ctype = _multipart(fields, "note.wav", data)
+    req = urllib.request.Request(OPENAI_URL, data=body, method="POST", headers={
+        "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"], "Content-Type": ctype})
+    try:
+        with urllib.request.urlopen(req, timeout=OPENAI_TIMEOUT) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise RemoteError(f"openai http {e.code}") from None
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+        raise RemoteError(f"openai unreachable ({type(e).__name__})") from None
+
+
+def transcribe(data: bytes, kb=None) -> dict:
+    """Return {"text", "languages": [codes], "engine": "openai"|"local"}. Language is detected automatically."""
+    if not available():
+        raise SttUnavailable("stt unavailable")
+    import numpy as np
+    samples = read_wav(data)                             # validates the file and its length
+    if float(np.sqrt(np.mean(samples ** 2))) < SILENT_RMS:
+        return {"text": "", "languages": [], "engine": engine()}     # nothing to transcribe (and nothing to pay for)
+    if remote_configured():
+        try:
+            res = _openai_post(data, keywords(kb))
+            langs = [l.get("code") for l in res.get("languages") or [] if isinstance(l, dict) and l.get("code")]
+            return {"text": clean(str(res.get("text") or "")), "languages": langs, "engine": "openai"}
+        except RemoteError:
+            if not local_available():
+                raise
+    out = _transcribe_local(samples)
+    out["engine"] = "local"
+    return out

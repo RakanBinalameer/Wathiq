@@ -191,7 +191,8 @@ def _wav(seconds=1.0, rate=16000, amp=0.3, channels=1):
 
 def test_stt_gracefully_unavailable(client, monkeypatch, tmp_path):
     monkeypatch.setenv("WHISPER_MODEL_DIR", str(tmp_path / "nothing"))
-    assert client.get("/api/stt/status").get_json() == {"server": False}
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert client.get("/api/stt/status").get_json() == {"server": False, "engine": ""}
     r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav()), "a.wav", "audio/wav")}, headers={"X-CSRFToken": client.csrf})
     assert r.status_code == 501
     assert client.post("/api/stt", data={}, headers={"X-CSRFToken": client.csrf}).status_code == 400
@@ -216,12 +217,13 @@ def test_stt_with_fake_model(client, monkeypatch):
 
     state = {"detected": "ar"}
     recs = {"": lambda: fake("", state["detected"], " اعطيت باراسيتامول "), "ar": lambda: fake("ar", "ar", "اعطيت باراسيتامول")}
-    monkeypatch.setattr(stt, "available", lambda: True)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(stt, "local_available", lambda: True)
     monkeypatch.setattr(stt, "_recognizer", lambda lang: recs[lang]())
     hdr = {"X-CSRFToken": client.csrf}
     # 48 kHz stereo is converted to 16 kHz mono; no "lang" field is needed
     r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, 48000, channels=2)), "a.wav", "audio/wav")}, headers=hdr)
-    assert r.status_code == 200 and r.get_json() == {"text": "اعطيت باراسيتامول", "languages": ["ar"]}
+    assert r.status_code == 200 and r.get_json() == {"text": "اعطيت باراسيتامول", "languages": ["ar"], "engine": "local"}
     assert calls[-1][0] == "" and calls[-1][1] == 16000 and abs(calls[-1][2] - 32000) <= 1
     # a language we do not expect (dialect mis-detected as Persian) is decoded again as Arabic
     state["detected"] = "fa"; n = len(calls)
@@ -230,7 +232,7 @@ def test_stt_with_fake_model(client, monkeypatch):
     # silence is never sent to the model (Whisper invents text on silence)
     n = len(calls)
     r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, amp=0.0)), "a.wav", "audio/wav")}, headers=hdr)
-    assert r.get_json() == {"text": "", "languages": []} and len(calls) == n
+    assert r.get_json() == {"text": "", "languages": [], "engine": "local"} and len(calls) == n
     # not a wav -> 400, never a crash
     r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(b"not audio"), "a.wav", "audio/wav")}, headers=hdr)
     assert r.status_code == 400
@@ -239,6 +241,47 @@ def test_stt_with_fake_model(client, monkeypatch):
     con = connect(client.application.config["DATABASE"])
     rows = [r["detail"] for r in con.execute("SELECT detail FROM audit WHERE action='stt'")]
     assert rows and all(d.startswith("chars=") and "باراسيتامول" not in d for d in rows)
+
+
+def test_stt_openai_engine_and_fallback(client, monkeypatch, tmp_path):
+    """Cloud engine: used when a key is set; sends languages ar+en and drug keywords; falls back to the local model."""
+    import io
+    from app import stt
+    hdr = {"X-CSRFToken": client.csrf}
+    post = lambda amp=0.3: client.post("/api/stt", data={"audio": (io.BytesIO(_wav(2, amp=amp)), "a.wav", "audio/wav")}, headers=hdr)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+    monkeypatch.setenv("WHISPER_MODEL_DIR", str(tmp_path / "nothing"))       # no local model
+    sent = []
+
+    def fake_post(data, kws):
+        sent.append((len(data), kws))
+        return {"text": "أعطيت panadol 1 g", "languages": [{"code": "ar"}, {"code": "en"}]}
+
+    monkeypatch.setattr(stt, "_openai_post", fake_post)
+    assert client.get("/api/stt/status").get_json() == {"server": True, "engine": "openai"}
+    r = post()
+    assert r.get_json() == {"text": "أعطيت panadol 1 g", "languages": ["ar", "en"], "engine": "openai"}
+    assert sent and 1 <= len(sent[0][1]) <= stt.KEYWORD_LIMIT                   # drug names from the KB are sent as keywords
+    n = len(sent); post(amp=0.0); assert len(sent) == n                     # silence is not sent (and not billed)
+    # the cloud call fails and there is no local model -> clear 502, no crash, key never echoed
+    def boom(data, kws): raise stt.RemoteError("openai http 401")
+    monkeypatch.setattr(stt, "_openai_post", boom)
+    r = post(); assert r.status_code == 502 and "sk-test" not in r.get_data(as_text=True)
+    # the cloud call fails but a local model exists -> falls back to it
+    monkeypatch.setattr(stt, "local_available", lambda: True)
+    monkeypatch.setattr(stt, "_transcribe_local", lambda samples: {"text": "محلي", "languages": ["ar"]})
+    r = post(); assert r.get_json() == {"text": "محلي", "languages": ["ar"], "engine": "local"}
+    # STT_ENGINE=local ignores the key
+    monkeypatch.setenv("STT_ENGINE", "local")
+    assert client.get("/api/stt/status").get_json()["engine"] == "local"
+
+
+def test_stt_multipart_body():
+    from app import stt
+    body, ctype = stt._multipart([("model", "gpt-transcribe"), ("languages[]", "ar"), ("languages[]", "en"), ("keywords[]", "metformin")], "n.wav", b"RIFFxx")
+    b = ctype.split("boundary=")[1].encode()
+    assert body.count(b"--" + b) == 6 and body.endswith(b"--" + b + b"--\r\n")
+    assert body.count(b'name="languages[]"') == 2 and b'name="keywords[]"' in body and b'filename="n.wav"' in body and b"RIFFxx" in body
 
 
 def test_stt_splits_at_pauses_and_keeps_both_languages():

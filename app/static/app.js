@@ -391,7 +391,7 @@
   }
 
   async function startRecording() {
-    if (!S.serverStt) { setStatus("نموذج Whisper غير مثبّت على الخادم. اكتب الملاحظة مؤقتاً، وبلّغ المسؤول.", true); return; }
+    if (!S.serverStt) { setStatus("التفريغ الصوتي غير مفعّل على هذا الخادم. اكتب الملاحظة مؤقتاً، وبلّغ المسؤول.", true); return; }
     if (!navigator.mediaDevices || !window.MediaRecorder) { setStatus("هذا المتصفح لا يدعم تسجيل الصوت. استخدم Chrome أو Edge أو Safari حديثاً.", true); return; }
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
@@ -403,13 +403,14 @@
     mr.onstop = async () => {
       clearTimeout(stopper);
       stream.getTracks().forEach((t) => t.stop());
-      setStatus("جارٍ التفريغ بنموذج Whisper… قد يستغرق بضع ثوانٍ.");
+      setStatus("جارٍ تفريغ الصوت… قد يستغرق بضع ثوانٍ.");
       try {
         const wav = await toWav16k(new Blob(S.chunks, { type: mr.mimeType || "audio/webm" }));
         const fd = new FormData(); fd.append("audio", wav, "note.wav");
         const r = await api("/api/stt", fd, true);
         if (!r.ok) { setStatus(r.data.error || "تعذّر تفريغ الصوت.", true); return; }
         if (!(r.data.text || "").trim()) { setStatus("لم يُسمع كلام في التسجيل. أعد المحاولة وتكلّم قرب الميكروفون.", true); return; }
+        showEngine(r.data.engine);
         appendText(r.data.text); setStatus(""); analyze();
       } catch (_) { setStatus("تعذّر تجهيز التسجيل. أعد المحاولة.", true); }
     };
@@ -421,15 +422,24 @@
     startRecording();
   }
 
-  async function initStt() {
-    try {
-      const res = await fetch("/api/stt/status", { credentials: "same-origin" });
-      S.serverStt = (await res.json()).server === true;
-    } catch (_) { S.serverStt = false; }
+  // Say honestly where the audio goes.
+  function showEngine(engine) {
     const note = $("stt-mode");
     note.hidden = false;
-    note.textContent = S.serverStt ? "الإملاء بنموذج Whisper على خادم المؤسسة؛ الصوت لا يخرج منه." :
-      "نموذج Whisper غير مثبّت على هذا الخادم، فالإملاء الصوتي متوقف. يمكنك الكتابة.";
+    note.textContent =
+      engine === "openai" ? "الإملاء عبر خدمة OpenAI السحابية: الصوت يُرسَل إليها. لا تستخدمه مع بيانات مرضى حقيقية." :
+      engine === "local" ? "الإملاء بنموذج Whisper على خادم المؤسسة؛ الصوت لا يخرج منه." :
+      "التفريغ الصوتي غير مفعّل على هذا الخادم (لا نموذج Whisper ولا مفتاح). يمكنك الكتابة.";
+  }
+
+  async function initStt() {
+    let engine = "";
+    try {
+      const res = await fetch("/api/stt/status", { credentials: "same-origin" });
+      const j = await res.json();
+      S.serverStt = j.server === true; engine = j.engine || "";
+    } catch (_) { S.serverStt = false; }
+    showEngine(S.serverStt ? engine : "");
   }
 
   // ---- wiring -------------------------------------------------------------------------------
