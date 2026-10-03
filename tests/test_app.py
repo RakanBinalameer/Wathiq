@@ -243,30 +243,30 @@ def test_stt_with_fake_model(client, monkeypatch):
     assert rows and all(d.startswith("chars=") and "باراسيتامول" not in d for d in rows)
 
 
-def test_stt_openai_engine_and_fallback(client, monkeypatch, tmp_path):
-    """Cloud engine: used when a key is set; sends languages ar+en and drug keywords; falls back to the local model."""
+def test_stt_gemini_engine_and_fallback(client, monkeypatch, tmp_path):
+    """Cloud engine: used when a key is set; sends drug vocabulary; falls back to the local model."""
     import io
     from app import stt
     hdr = {"X-CSRFToken": client.csrf}
     post = lambda amp=0.3: client.post("/api/stt", data={"audio": (io.BytesIO(_wav(2, amp=amp)), "a.wav", "audio/wav")}, headers=hdr)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-test-not-a-real-key")
     monkeypatch.setenv("WHISPER_MODEL_DIR", str(tmp_path / "nothing"))       # no local model
     sent = []
 
     def fake_post(data, kws):
         sent.append((len(data), kws))
-        return {"text": "أعطيت panadol 1 g", "languages": [{"code": "ar"}, {"code": "en"}]}
+        return " أعطيت panadol 1 g "
 
-    monkeypatch.setattr(stt, "_openai_post", fake_post)
-    assert client.get("/api/stt/status").get_json() == {"server": True, "engine": "openai"}
+    monkeypatch.setattr(stt, "_gemini_post", fake_post)
+    assert client.get("/api/stt/status").get_json() == {"server": True, "engine": "gemini"}
     r = post()
-    assert r.get_json() == {"text": "أعطيت panadol 1 g", "languages": ["ar", "en"], "engine": "openai"}
-    assert sent and 1 <= len(sent[0][1]) <= stt.KEYWORD_LIMIT                   # drug names from the KB are sent as keywords
-    n = len(sent); post(amp=0.0); assert len(sent) == n                     # silence is not sent (and not billed)
+    assert r.get_json() == {"text": "أعطيت panadol 1 g", "languages": [], "engine": "gemini"}
+    assert sent and 1 <= len(sent[0][1]) <= stt.KEYWORD_LIMIT                   # drug names from the KB are sent as vocabulary
+    n = len(sent); post(amp=0.0); assert len(sent) == n                     # silence is not sent
     # the cloud call fails and there is no local model -> clear 502, no crash, key never echoed
-    def boom(data, kws): raise stt.RemoteError("openai http 401")
-    monkeypatch.setattr(stt, "_openai_post", boom)
-    r = post(); assert r.status_code == 502 and "sk-test" not in r.get_data(as_text=True)
+    def boom(data, kws): raise stt.RemoteError("gemini http 429")
+    monkeypatch.setattr(stt, "_gemini_post", boom)
+    r = post(); assert r.status_code == 502 and "AIza-test" not in r.get_data(as_text=True)
     # the cloud call fails but a local model exists -> falls back to it
     monkeypatch.setattr(stt, "local_available", lambda: True)
     monkeypatch.setattr(stt, "_transcribe_local", lambda samples: {"text": "محلي", "languages": ["ar"]})
@@ -276,12 +276,41 @@ def test_stt_openai_engine_and_fallback(client, monkeypatch, tmp_path):
     assert client.get("/api/stt/status").get_json()["engine"] == "local"
 
 
-def test_stt_multipart_body():
+def test_stt_gemini_request_and_response_shapes(monkeypatch):
+    """The exact HTTP request that would be sent (no network), and both response shapes the parser accepts."""
+    import base64, json, urllib.error
     from app import stt
-    body, ctype = stt._multipart([("model", "gpt-transcribe"), ("languages[]", "ar"), ("languages[]", "en"), ("keywords[]", "metformin")], "n.wav", b"RIFFxx")
-    b = ctype.split("boundary=")[1].encode()
-    assert body.count(b"--" + b) == 6 and body.endswith(b"--" + b + b"--\r\n")
-    assert body.count(b'name="languages[]"') == 2 and b'name="keywords[]"' in body and b'filename="n.wav"' in body and b"RIFFxx" in body
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-test-not-a-real-key")
+    seen = {}
+
+    class Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return json.dumps({"steps": [{"content": [{"type": "text", "text": "مرحبا hello"}]}]}).encode()
+
+    def fake_urlopen(req, timeout=None):
+        seen["req"], seen["timeout"] = req, timeout
+        return Resp()
+
+    monkeypatch.setattr(stt.urllib.request, "urlopen", fake_urlopen)
+    assert stt._gemini_post(b"RIFFdata", ["metformin", "amlodipine"]) == "مرحبا hello"
+    req = seen["req"]
+    h = {k.lower(): v for k, v in req.header_items()}
+    assert req.full_url == "https://generativelanguage.googleapis.com/v1beta/interactions" and req.get_method() == "POST"
+    assert h["x-goog-api-key"] == "AIza-test-not-a-real-key" and h["api-revision"] == stt.GEMINI_REVISION
+    body = json.loads(req.data)
+    assert body["model"] == "gemini-3.5-transcribe" and "AIza" not in req.data.decode()      # the key is only in the header
+    assert body["input"] == [{"type": "audio", "data": base64.b64encode(b"RIFFdata").decode(), "mime_type": "audio/wav"}]
+    assert body["generation_config"]["transcription_config"] == {"language_codes": [], "custom_vocabulary": ["metformin", "amlodipine"]}
+    assert stt._gemini_text({"output_text": "نص"}) == "نص" and stt._gemini_text({}) == ""
+    # an HTTP error becomes RemoteError and never carries the key
+    def http_err(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 429, "Too Many", {}, __import__("io").BytesIO(b'{"error":{"message":"quota"}}'))
+    monkeypatch.setattr(stt.urllib.request, "urlopen", http_err)
+    import pytest
+    with pytest.raises(stt.RemoteError) as ei:
+        stt._gemini_post(b"x", [])
+    assert "AIza" not in str(ei.value) and "429" in str(ei.value)
 
 
 def test_stt_splits_at_pauses_and_keeps_both_languages():

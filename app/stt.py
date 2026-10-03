@@ -1,4 +1,4 @@
-"""Speech-to-text with OpenAI Whisper, run on this server through sherpa-onnx (CPU, int8).
+"""Speech-to-text with Whisper (the open model), run on this server through sherpa-onnx (CPU, int8).
 
 Audio never leaves the server. The browser records, converts to 16 kHz mono WAV and posts it to
 /api/stt; this module decodes it and returns text.
@@ -16,23 +16,26 @@ segment), so Arabic and English parts of one recording are each decoded in their
 detected as anything other than Arabic/English is decoded again as Arabic. Words mixed inside ONE sentence
 are not handled: Whisper picks one language per segment.
 
-Optional cloud engine (OpenAI `gpt-transcribe`), used when OPENAI_API_KEY is set (STT_ENGINE=local turns it off):
-  OPENAI_API_KEY     the key. NEVER put it in code or in git; read it from the environment or a private file.
-  OPENAI_STT_MODEL   default gpt-transcribe
-It receives the whole recording with languages=ar,en and drug names as keywords, so Arabic and English inside
-one recording are handled by the model itself. The audio LEAVES this server (demo/fake data only). If the call
-fails, the local model is used when it is installed. Not yet tested against the real API.
+Optional cloud engine (Google Gemini `gemini-3.5-transcribe`), used when GEMINI_API_KEY is set
+(STT_ENGINE=local turns it off):
+  GEMINI_API_KEY     the key. NEVER put it in code or in git; read it from the environment or a private file.
+  GEMINI_STT_MODEL   default gemini-3.5-transcribe
+It receives the whole recording with automatic language detection and drug names as custom vocabulary; Google
+documents that it switches between languages when the speaker mixes them. The audio LEAVES this server (demo/fake
+data only; Google's free tier may use content to improve its products). If the call fails, the local model is
+used when it is installed. Not yet tested against the real API.
 
 Accuracy on real nurse speech has NOT been measured.
 """
+import base64
 import io
 import json
+import logging
 import os
 import re
 import threading
 import urllib.error
 import urllib.request
-import uuid
 import wave
 from pathlib import Path
 
@@ -209,13 +212,15 @@ def _transcribe_local(samples) -> dict:
 
 
 # ---- optional cloud engine ------------------------------------------------------------------------
-OPENAI_URL = "https://api.openai.com/v1/audio/transcriptions"
-OPENAI_TIMEOUT = 60
-KEYWORD_LIMIT = 40
+log = logging.getLogger("wathiq.stt")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+GEMINI_REVISION = "2026-05-20"      # the Api-Revision shown in Google's Interactions API examples
+GEMINI_TIMEOUT = 60
+KEYWORD_LIMIT = 40                  # Google: up to 100 vocabulary terms work best
 
 
 def remote_configured() -> bool:
-    return bool(os.environ.get("OPENAI_API_KEY")) and os.environ.get("STT_ENGINE", "auto") != "local"
+    return bool(os.environ.get("GEMINI_API_KEY")) and os.environ.get("STT_ENGINE", "auto") != "local"
 
 
 def available() -> bool:
@@ -223,9 +228,9 @@ def available() -> bool:
 
 
 def engine() -> str:
-    """Which engine the next request tries first: "openai", "local" or "" (none)."""
+    """Which engine the next request tries first: "gemini", "local" or "" (none)."""
     if remote_configured():
-        return "openai"
+        return "gemini"
     return "local" if local_available() else ""
 
 
@@ -237,39 +242,43 @@ def keywords(kb):
     return [n for n in names if not re.search(r"[<>\r\n]", n)][:KEYWORD_LIMIT]
 
 
-def _multipart(fields, file_name, file_bytes, file_type="audio/wav"):
-    """Build a multipart/form-data body (no third-party library). fields: list of (name, value)."""
-    boundary = uuid.uuid4().hex
-    out = []
-    for name, value in fields:
-        out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode("utf-8"))
-    out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{file_name}"\r\n'
-               f"Content-Type: {file_type}\r\n\r\n".encode("utf-8"))
-    out.append(file_bytes)
-    out.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
-    return b"".join(out), f"multipart/form-data; boundary={boundary}"
+def _gemini_text(res: dict) -> str:
+    """Transcript out of an Interactions API response (top-level output_text, else the text steps)."""
+    if isinstance(res.get("output_text"), str):
+        return res["output_text"]
+    texts = []
+    for step in res.get("steps") or []:
+        for c in (step.get("content") or []) if isinstance(step, dict) else []:
+            if isinstance(c, dict) and c.get("type") == "text" and c.get("text"):
+                texts.append(str(c["text"]))
+    return " ".join(texts)
 
 
-def _openai_post(data: bytes, kws) -> dict:
-    """Send the recording to OpenAI; returns the parsed JSON. Raises RemoteError (the key is never logged)."""
-    fields = [("model", os.environ.get("OPENAI_STT_MODEL") or "gpt-transcribe"),
-              ("prompt", "ملاحظة تمريضية بالعربية الخليجية والإنجليزية، وأسماء الأدوية بالإنجليزية."),
-              ("languages[]", "ar"), ("languages[]", "en")]
-    fields += [("keywords[]", k) for k in kws]
-    body, ctype = _multipart(fields, "note.wav", data)
-    req = urllib.request.Request(OPENAI_URL, data=body, method="POST", headers={
-        "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"], "Content-Type": ctype})
+def _gemini_post(data: bytes, kws) -> str:
+    """Send the recording to Gemini and return the transcript. Raises RemoteError (the key is never logged)."""
+    body = {"model": os.environ.get("GEMINI_STT_MODEL") or "gemini-3.5-transcribe",
+            "input": [{"type": "audio", "data": base64.b64encode(data).decode("ascii"), "mime_type": "audio/wav"}],
+            "generation_config": {"transcription_config": {"language_codes": [], "custom_vocabulary": list(kws)}}}
+    req = urllib.request.Request(GEMINI_URL, data=json.dumps(body).encode("utf-8"), method="POST", headers={
+        "x-goog-api-key": os.environ["GEMINI_API_KEY"], "Content-Type": "application/json",
+        "Api-Revision": GEMINI_REVISION})
     try:
-        with urllib.request.urlopen(req, timeout=OPENAI_TIMEOUT) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        with urllib.request.urlopen(req, timeout=GEMINI_TIMEOUT) as resp:
+            return _gemini_text(json.loads(resp.read().decode("utf-8")))
     except urllib.error.HTTPError as e:
-        raise RemoteError(f"openai http {e.code}") from None
+        try:
+            detail = (json.loads(e.read().decode("utf-8")).get("error") or {}).get("message", "")[:200]
+        except Exception:
+            detail = ""
+        log.warning("gemini http %s %s", e.code, detail)
+        raise RemoteError(f"gemini http {e.code}") from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
-        raise RemoteError(f"openai unreachable ({type(e).__name__})") from None
+        log.warning("gemini unreachable (%s)", type(e).__name__)
+        raise RemoteError("gemini unreachable") from None
 
 
 def transcribe(data: bytes, kb=None) -> dict:
-    """Return {"text", "languages": [codes], "engine": "openai"|"local"}. Language is detected automatically."""
+    """Return {"text", "languages": [codes], "engine": "gemini"|"local"}. Language is detected automatically."""
     if not available():
         raise SttUnavailable("stt unavailable")
     import numpy as np
@@ -278,9 +287,7 @@ def transcribe(data: bytes, kb=None) -> dict:
         return {"text": "", "languages": [], "engine": engine()}     # nothing to transcribe (and nothing to pay for)
     if remote_configured():
         try:
-            res = _openai_post(data, keywords(kb))
-            langs = [l.get("code") for l in res.get("languages") or [] if isinstance(l, dict) and l.get("code")]
-            return {"text": clean(str(res.get("text") or "")), "languages": langs, "engine": "openai"}
+            return {"text": clean(_gemini_post(data, keywords(kb))), "languages": [], "engine": "gemini"}
         except RemoteError:
             if not local_available():
                 raise
