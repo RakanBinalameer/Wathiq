@@ -363,46 +363,62 @@
     ta.dispatchEvent(new Event("input"));
   }
 
-  function startBrowserSpeech() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setStatus("هذا المتصفح لا يدعم الإملاء الصوتي. اكتب الملاحظة أو استخدم Chrome.", true); return; }
-    const rec = new SR();
-    rec.lang = $("lang").value; rec.continuous = true; rec.interimResults = true;
-    let base = $("transcript").value;
-    if (base && !/\s$/.test(base)) base += " ";
-    rec.onresult = (ev) => {
-      let fin = "", interim = "";
-      for (let i = ev.resultIndex; i < ev.results.length; i++) (ev.results[i].isFinal ? (fin += ev.results[i][0].transcript) : (interim += ev.results[i][0].transcript));
-      if (fin) base += fin + " ";
-      $("transcript").value = base + interim;
-      $("transcript").dispatchEvent(new Event("input"));
-    };
-    rec.onerror = (ev) => { setStatus(ev.error === "not-allowed" ? "لم يُسمح باستخدام الميكروفون. فعّله من إعدادات المتصفح." : "تعذّر الإملاء الصوتي: " + ev.error, true); micState(false); };
-    rec.onend = () => { if (S.recording) { micState(false); if ($("transcript").value.trim()) analyze(); } };
-    S.rec = rec; rec.start(); micState(true); setStatus("أتكلّم… اضغط الزر مرة أخرى عند الانتهاء.");
+  // Recording stays in the browser; the server runs Whisper. The recording is converted to 16 kHz mono WAV
+  // here so the server needs no audio codecs.
+  const MAX_RECORD_MS = 120000;
+
+  function encodeWav(samples, rate) {
+    const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, "data"); v.setUint32(40, samples.length * 2, true);
+    for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
+    return new Blob([buf], { type: "audio/wav" });
   }
 
-  async function startServerRecording() {
+  async function toWav16k(blob) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    let decoded;
+    try { decoded = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close && ctx.close(); }
+    const len = Math.max(1, Math.ceil(decoded.duration * 16000));
+    const off = new OfflineAudioContext(1, len, 16000);       // mixes down to mono and resamples
+    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+    const rendered = await off.startRendering();
+    return encodeWav(rendered.getChannelData(0), 16000);
+  }
+
+  async function startRecording() {
+    if (!S.serverStt) { setStatus("نموذج Whisper غير مثبّت على الخادم. اكتب الملاحظة مؤقتاً، وبلّغ المسؤول.", true); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder) { setStatus("هذا المتصفح لا يدعم تسجيل الصوت. استخدم Chrome أو Edge أو Safari حديثاً.", true); return; }
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch (_) { setStatus("لم يُسمح باستخدام الميكروفون. فعّله من إعدادات المتصفح.", true); return; }
     S.chunks = [];
     const mr = new MediaRecorder(stream);
+    const stopper = setTimeout(() => mr.state === "recording" && toggleMic(), MAX_RECORD_MS);
     mr.ondataavailable = (e) => e.data.size && S.chunks.push(e.data);
     mr.onstop = async () => {
+      clearTimeout(stopper);
       stream.getTracks().forEach((t) => t.stop());
-      setStatus("جارٍ تفريغ الصوت على الخادم…");
-      const fd = new FormData(); fd.append("audio", new Blob(S.chunks, { type: mr.mimeType || "audio/webm" }), "note.webm");
-      const r = await api("/api/stt", fd, true);
-      if (!r.ok) { setStatus(r.data.error || "تعذّر تفريغ الصوت.", true); return; }
-      appendText(r.data.text || ""); setStatus(""); analyze();
+      setStatus("جارٍ التفريغ بنموذج Whisper… قد يستغرق بضع ثوانٍ.");
+      try {
+        const wav = await toWav16k(new Blob(S.chunks, { type: mr.mimeType || "audio/webm" }));
+        const fd = new FormData(); fd.append("audio", wav, "note.wav"); fd.append("lang", $("lang").value);
+        const r = await api("/api/stt", fd, true);
+        if (!r.ok) { setStatus(r.data.error || "تعذّر تفريغ الصوت.", true); return; }
+        if (!(r.data.text || "").trim()) { setStatus("لم يُسمع كلام في التسجيل. أعد المحاولة وتكلّم قرب الميكروفون.", true); return; }
+        appendText(r.data.text); setStatus(""); analyze();
+      } catch (_) { setStatus("تعذّر تجهيز التسجيل. أعد المحاولة.", true); }
     };
     S.rec = mr; mr.start(); micState(true); setStatus("أسجّل… اضغط الزر مرة أخرى عند الانتهاء.");
   }
 
   function toggleMic() {
     if (S.recording) { S.rec && S.rec.stop(); micState(false); return; }
-    S.serverStt ? startServerRecording() : startBrowserSpeech();
+    startRecording();
   }
 
   async function initStt() {
@@ -412,8 +428,8 @@
     } catch (_) { S.serverStt = false; }
     const note = $("stt-mode");
     note.hidden = false;
-    note.textContent = S.serverStt ? "الإملاء عبر نموذج Whisper على خادم المؤسسة." :
-      "وضع العرض: الإملاء يمر عبر خدمة التعرف الصوتي في المتصفح. لا تستخدمه مع بيانات مرضى حقيقية.";
+    note.textContent = S.serverStt ? "الإملاء بنموذج Whisper على خادم المؤسسة؛ الصوت لا يخرج منه." :
+      "نموذج Whisper غير مثبّت على هذا الخادم، فالإملاء الصوتي متوقف. يمكنك الكتابة.";
   }
 
   // ---- wiring -------------------------------------------------------------------------------

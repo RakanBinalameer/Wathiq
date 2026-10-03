@@ -446,10 +446,15 @@ def api_stt_status():
 @limiter.limit("20 per minute")
 def api_stt():
     f = request.files.get("audio")
-    if not f or not (f.mimetype or "").startswith(("audio/", "video/webm")):
+    if not f or not (f.mimetype or "").startswith(("audio/", "video/")):
         return jsonify(error="ملف صوتي مطلوب"), 400
     if not stt.available():
-        return jsonify(error="التفريغ الصوتي على الخادم غير مفعّل"), 501
-    text = stt.transcribe(f, kb())
+        return jsonify(error="نموذج Whisper غير مثبّت على الخادم."), 501
+    try:
+        text = stt.transcribe(f.read(), request.form.get("lang", "ar"))
+    except stt.BadAudio:
+        return jsonify(error="تعذّرت قراءة التسجيل. أعد المحاولة."), 400
+    except stt.SttUnavailable:
+        return jsonify(error="نموذج Whisper غير مثبّت على الخادم."), 501
     audit("stt", f"chars={len(text)}", current_user.id)
     return jsonify(text=text)

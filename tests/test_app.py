@@ -179,11 +179,76 @@ def test_kb_search(client):
     assert any(r["code"] == "I10" for r in res)
 
 
-def test_stt_gracefully_unavailable(client):
+def _wav(seconds=1.0, rate=16000, amp=0.3, channels=1):
+    import io, math, struct, wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels); w.setsampwidth(2); w.setframerate(rate)
+        n = int(seconds * rate)
+        w.writeframes(b"".join(struct.pack("<h", int(amp * 32767 * math.sin(i / 20))) * channels for i in range(n)))
+    return buf.getvalue()
+
+
+def test_stt_gracefully_unavailable(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("WHISPER_MODEL_DIR", str(tmp_path / "nothing"))
     assert client.get("/api/stt/status").get_json() == {"server": False}
-    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(b"abc"), "a.webm", "audio/webm")}, headers={"X-CSRFToken": client.csrf})
+    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav()), "a.wav", "audio/wav")}, headers={"X-CSRFToken": client.csrf})
     assert r.status_code == 501
     assert client.post("/api/stt", data={}, headers={"X-CSRFToken": client.csrf}).status_code == 400
+
+
+def test_stt_with_fake_model(client, monkeypatch):
+    from app import stt
+    seen = []
+
+    class FakeStream:
+        def __init__(self): self.result = type("R", (), {"text": ""})()
+        def accept_waveform(self, rate, x): self.n = len(x); self.rate = rate
+
+    class FakeRec:
+        def create_stream(self): return FakeStream()
+        def decode_stream(self, st): st.result.text = " اعطيت باراسيتامول "; seen.append((st.rate, st.n))
+
+    monkeypatch.setattr(stt, "available", lambda: True)
+    monkeypatch.setattr(stt, "_recognizer", lambda lang: FakeRec())
+    hdr = {"X-CSRFToken": client.csrf}
+    # 48 kHz stereo is converted to 16 kHz mono
+    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, 48000, channels=2)), "a.wav", "audio/wav"), "lang": "ar"}, headers=hdr)
+    assert r.status_code == 200 and r.get_json()["text"] == "اعطيت باراسيتامول"
+    assert seen[-1][0] == 16000 and abs(seen[-1][1] - 32000) <= 1
+    # silence is never sent to the model (Whisper invents text on silence)
+    n = len(seen)
+    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(_wav(2, amp=0.0)), "a.wav", "audio/wav")}, headers=hdr)
+    assert r.get_json()["text"] == "" and len(seen) == n
+    # not a wav -> 400, never a crash
+    r = client.post("/api/stt", data={"audio": (__import__("io").BytesIO(b"not audio"), "a.wav", "audio/wav")}, headers=hdr)
+    assert r.status_code == 400
+    # the call is audited by length only, never by content
+    from app.db import connect
+    con = connect(client.application.config["DATABASE"])
+    rows = [r["detail"] for r in con.execute("SELECT detail FROM audit WHERE action='stt'")]
+    assert rows and all(d.startswith("chars=") and "باراسيتامول" not in d for d in rows)
+
+
+def test_stt_chunking_and_cleaning():
+    import numpy as np
+    from app import stt
+    x = np.ones(16000 * 60, dtype=np.float32) * 0.2
+    x[16000 * 23: 16000 * 23 + 1600] = 0.0         # a quiet spot near the first cut
+    parts = stt.split_chunks(x)
+    assert all(len(p) <= 25 * 16000 for p in parts) and sum(len(p) for p in parts) == len(x) and len(parts) == 3
+    assert len(parts[0]) == 23 * 16000 + 800         # cut lands in the quiet spot
+    assert stt.clean("اه اه اه اه اه اه") == "اه"
+    assert stt.clean("5 5 5 mg") == "5 5 5 mg"      # real repetition below the threshold is kept
+
+
+def test_stt_refuses_overlong_recording():
+    import pytest
+    from app import stt
+    with pytest.raises(stt.BadAudio):
+        stt.read_wav(_wav(seconds=130))
+    with pytest.raises(stt.BadAudio):
+        stt.read_wav(b"RIFF....")
 
 
 def test_healthz_and_404(app, client):
