@@ -8,11 +8,10 @@ Source: github.com/k2-fsa/sherpa-onnx releases (asr-models). Keeps only the int8
 """
 import sys
 import tarfile
-import tempfile
 import urllib.request
 from pathlib import Path
 
-URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-{size}.tar.bz2"
+URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-{size}.tar.bz2"  # tests may override
 
 
 def main(size: str) -> None:
@@ -21,15 +20,18 @@ def main(size: str) -> None:
     dest = Path(__file__).resolve().parent.parent / "models" / f"whisper-{size}"
     dest.mkdir(parents=True, exist_ok=True)
     wanted = (f"{size}-encoder.int8.onnx", f"{size}-decoder.int8.onnx", f"{size}-tokens.txt")
-    with tempfile.NamedTemporaryFile(suffix=".tar.bz2") as tmp:
-        print("downloading", URL.format(size=size))
-        urllib.request.urlretrieve(URL.format(size=size), tmp.name)
-        with tarfile.open(tmp.name, "r:bz2") as tar:
-            for m in tar:
-                name = Path(m.name).name
-                if m.isfile() and name in wanted:
-                    (dest / name).write_bytes(tar.extractfile(m).read())
-                    print("saved", dest / name)
+    url = URL.format(size=size)
+    print("downloading", url)
+    # Streamed straight into tar: no temporary copy of the archive (it counted against small disk quotas).
+    with urllib.request.urlopen(url) as resp, tarfile.open(fileobj=resp, mode="r|bz2") as tar:
+        for m in tar:
+            name = Path(m.name).name
+            if m.isfile() and name in wanted:
+                src = tar.extractfile(m)
+                with open(dest / name, "wb") as out:
+                    while chunk := src.read(1 << 20):
+                        out.write(chunk)
+                print("saved", dest / name)
     missing = [w for w in wanted if not (dest / w).is_file()]
     if missing:
         sys.exit(f"missing after extract: {missing}")
