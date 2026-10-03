@@ -21,4 +21,4 @@
   <div id="kb-results" class="kb-results"></div>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='kb.js') }}?v=1" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ asset_url('kb.js') }}" defer></script>{% endblock %}

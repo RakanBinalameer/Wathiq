@@ -34,6 +34,7 @@ VITAL_LOINC = {
     "spo2": ("59408-5", "Oxygen saturation in Arterial blood by Pulse oximetry", "%", "%"),
     "glucose": ("2339-0", "Glucose [Mass/volume] in Blood", "mg/dL", "mg/dL"),
 }
+GLUCOSE_MMOL = ("15074-8", "Glucose [Moles/volume] in Blood", "mmol/L", "mmol/L")   # used when the nurse gave mmol/L
 BP_PANEL = ("85354-9", "Blood pressure panel with all children optional")
 BP_SYS = ("8480-6", "Systolic blood pressure")
 BP_DIA = ("8462-4", "Diastolic blood pressure")
@@ -53,14 +54,18 @@ def _iso(created_at):
 
 
 def _num(v):
-    f = float(v)
+    """Number from a stored string; None when it is not a plain number (never raise while exporting)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
     return int(f) if f.is_integer() else f
 
 
 def _medication(note_id, i, e, patient_url, when):
+    # Text only. The KB's RxNorm code belongs to ONE product (e.g. "Acetaminophen 500 MG Oral Tablet"), which would
+    # misdescribe the nurse's dose/route; no ingredient-level code is stored, so none is exported.
     code = {"text": e["label"]}
-    if e.get("code") and e.get("code_system") == "RxNorm":
-        code["coding"] = [{"system": SYS_RXNORM, "code": str(e["code"]), "display": e["label"]}]
     dosage = {}
     parts = []
     dose = e.get("dose")
@@ -123,8 +128,8 @@ def _vital(note_id, i, e, patient_url, when):
             "subject": {"reference": patient_url}, "effectiveDateTime": when}
     if e["kind"] == "bp":
         sys_v, dia_v = e["value"].split("/") if "/" in e["value"] else (None, None)
-        if sys_v is None:
-            return None  # a lone BP number can't be mapped honestly
+        if sys_v is None or _num(sys_v) is None or _num(dia_v) is None:
+            return None  # a lone or unreadable BP value can't be mapped honestly
         mm = {"unit": "mmHg", "system": SYS_UCUM, "code": "mm[Hg]"}
         base["code"] = {"coding": [{"system": SYS_LOINC, "code": BP_PANEL[0], "display": BP_PANEL[1]}], "text": "Blood pressure"}
         base["component"] = [
@@ -132,7 +137,9 @@ def _vital(note_id, i, e, patient_url, when):
              "valueQuantity": {"value": _num(v), **mm}} for c, v in ((BP_SYS, sys_v), (BP_DIA, dia_v))]
         return base
     loinc = VITAL_LOINC.get(e["kind"])
-    if not loinc:
+    if e["kind"] == "glucose" and e.get("unit") == "mmol/L":
+        loinc = GLUCOSE_MMOL                  # the stored unit decides: 12 mmol/L must never be exported as 12 mg/dL
+    if not loinc or _num(e["value"]) is None:
         return None
     base["code"] = {"coding": [{"system": SYS_LOINC, "code": loinc[0], "display": loinc[1]}], "text": e.get("label") or loinc[1]}
     base["valueQuantity"] = {"value": _num(e["value"]), "unit": loinc[3], "system": SYS_UCUM, "code": loinc[2]}

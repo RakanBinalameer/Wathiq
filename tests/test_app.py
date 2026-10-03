@@ -375,3 +375,29 @@ def test_sfda_import(tmp_path):
     con, _ = build_kb(str(tmp_path / "s.db"), data, str(csv))
     assert con.execute("SELECT sfda_verified FROM drugs WHERE key='paracetamol'").fetchone()[0] == 1
     assert con.execute("SELECT source FROM drugs WHERE key='newdrugine'").fetchone()[0] == "sfda_import"
+
+
+def test_stt_rejects_empty_recording(client, monkeypatch, tmp_path):
+    import io, wave
+    from app import stt
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    for rate in (16000, 44100):
+        b = io.BytesIO()
+        with wave.open(b, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(b"")
+        try:
+            stt.read_wav(b.getvalue())
+            assert False, "an empty recording must be refused"
+        except stt.BadAudio:
+            pass
+
+
+def test_static_urls_carry_the_file_content_hash(app, client):
+    # the browser caches static files for days: the URL must change whenever the file changes
+    import hashlib, re
+    from pathlib import Path
+    html = client.get("/").text
+    for name in ("app.js", "sbar_core.js", "style.css"):
+        m = re.search(re.escape(name) + r"\?v=([0-9a-f]{10})", html)
+        assert m, f"{name} URL must carry a content hash"
+        assert m.group(1) == hashlib.md5((Path(app.static_folder) / name).read_bytes()).hexdigest()[:10]

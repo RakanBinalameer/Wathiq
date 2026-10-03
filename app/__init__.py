@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import secrets
@@ -5,7 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, url_for
 from flask_compress import Compress
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -84,6 +85,24 @@ def create_app(test_config=None):
         from datetime import datetime, timezone
         dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).astimezone(tz)
         return dt.strftime("%Y-%m-%d %H:%M")
+
+    _asset_hashes = {}
+
+    @app.context_processor
+    def _assets():
+        def asset_url(filename):
+            """Static URL that changes whenever the file's content changes (the browser caches static files for days)."""
+            path = Path(app.static_folder) / filename
+            try:
+                stamp = path.stat().st_mtime_ns
+                cached = _asset_hashes.get(filename)
+                if cached is None or cached[0] != stamp:
+                    cached = (stamp, hashlib.md5(path.read_bytes()).hexdigest()[:10])
+                    _asset_hashes[filename] = cached
+                return url_for("static", filename=filename, v=cached[1])
+            except OSError:
+                return url_for("static", filename=filename)
+        return {"asset_url": asset_url}
 
     from .views import bp
     app.register_blueprint(bp)

@@ -8,7 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import fhir, limiter, login_manager, sbar, stt
 from .db import audit, get_db
-from .extract import _TO_MG, analyze, allergy_drug_ids, drug_warnings
+from .extract import _TO_MG, VITALS, analyze, allergy_drug_ids, drug_warnings
 
 bp = Blueprint("main", __name__)
 
@@ -16,7 +16,10 @@ ROUTES = {"IV", "IM", "SC", "SL", "INH", "PR", "TOP", "PO"}
 FREQ_RE = re.compile(r"^(q\d{1,2}h|BID|TID|QID|QD|QHS|STAT)$")
 UNITS = {"mg", "mcg", "g", "ml", "unit", "meq", "tab", "cap", "amp"}
 VITAL_KINDS = {"bp", "hr", "rr", "temp", "spo2", "glucose"}
-VITAL_VALUE_RE = re.compile(r"^\d{1,3}(\.\d)?(/\d{1,3})?$")
+VITAL_NUM_RE = re.compile(r"^\d{1,3}(\.\d)?$")      # hr, rr, temp, spo2, glucose
+VITAL_BP_RE = re.compile(r"^\d{1,3}/\d{1,3}$")      # blood pressure only: systolic/diastolic
+VITAL_META = {k: (label, unit) for k, label, unit, _rx in VITALS}   # kind -> (Arabic label, unit)
+GLUCOSE_UNITS = {"mg/dL", "mmol/L"}
 PATIENT_REF_RE = re.compile(r"^[A-Za-z0-9\-_/]{1,32}$")
 _DUMMY_HASH = generate_password_hash("not-a-real-password")
 
@@ -225,10 +228,15 @@ def _clean_entity(k, e, allergy_ids, allergy_classes):
                 "code": view["code"], "code_system": view["code_system"], "warnings": []}, None
     if etype == "vital":
         kind, value = e.get("kind"), str(e.get("value", ""))
-        if kind not in VITAL_KINDS or not VITAL_VALUE_RE.match(value):
+        if kind not in VITAL_KINDS or not (VITAL_BP_RE if kind == "bp" else VITAL_NUM_RE).match(value):
             return None, "علامة حيوية غير صالحة"
-        return {"type": "vital", "text": text, "kind": kind, "label": str(e.get("label", ""))[:40], "value": value,
-                "unit": str(e.get("unit", ""))[:10], "warnings": []}, None
+        label, unit = VITAL_META[kind]                  # label and unit come from the server, never from the client
+        if kind == "glucose":
+            unit = e.get("unit") if e.get("unit") in GLUCOSE_UNITS else None
+            if unit is None:
+                return None, "علامة حيوية غير صالحة"
+        return {"type": "vital", "text": text, "kind": kind, "label": label, "value": value,
+                "unit": unit, "warnings": []}, None
     return None, "نوع غير معروف"
 
 

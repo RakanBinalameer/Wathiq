@@ -117,4 +117,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='sbar_core.js') }}?v=1" defer></script><script src="{{ url_for('static', filename='app.js') }}?v=6" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ asset_url('sbar_core.js') }}" defer></script><script src="{{ asset_url('app.js') }}" defer></script>{% endblock %}

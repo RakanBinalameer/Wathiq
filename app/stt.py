@@ -123,6 +123,8 @@ def read_wav(data: bytes):
     except (wave.Error, EOFError) as e:
         raise BadAudio("not a wav file") from e
     x = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if len(x) < ch:
+        raise BadAudio("empty recording")
     if ch == 2:
         x = x.reshape(-1, 2).mean(axis=1)
     if rate != 16000:
