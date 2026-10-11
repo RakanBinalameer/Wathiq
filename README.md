@@ -57,6 +57,3 @@ The UI has "try an example" buttons that work without a microphone (Arabic, Engl
 - Maximum dose limits (`max_single_dose_mg`) and vital-sign thresholds are provisional and must be approved by the pharmacy/medical team. The extra Synthea diagnoses have no ICD-10 (they are marked as such) and are left to medical coding.
 - No integration with a hospital information system (HIS/EMR) or a payment system; they were not required by the given specification. There is an **export** in HL7 FHIR R4 format for every saved note (`GET /api/notes/<id>/fhir`: `MedicationStatement`, `Condition`, `Observation`), which is a file ready for exchange, not a live connection to any system. Its structure was checked with `fhir.resources` (R4B) models only, not with the official FHIR validator or against any server or Saudi implementation guide.
 - For production: HTTPS (`FORCE_HTTPS=1`), a fixed `SECRET_KEY`, a managed database instead of SQLite, a shared rate-limit store (Redis), encryption at rest, and cybersecurity and data-protection approval (PDPL / NCA).
-
-## Author
-Rakan
