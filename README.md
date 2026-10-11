@@ -6,6 +6,8 @@ A hackathon prototype that turns a nurse's **spoken dictation** (Arabic, English
 medications with dose / route / frequency, diagnoses (ICD-10), and vital signs, matched against a medical knowledge base.
 **The nurse then reviews and confirms** the note before anything is saved.
 
+**Demo video:** https://drive.google.com/file/d/1q0BAvxiXYxhFO5Tej8vwGRxMts7qUcjp/view?usp=sharing
+
 **Published demo:** https://wathiq.pythonanywhere.com. Fake data only; do not enter real patient data. Analysis accuracy on real nurses' speech has not been measured yet.
 
 ## Quick start
